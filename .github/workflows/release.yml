@@ -18,7 +18,7 @@ jobs:
         run: chmod +x gradlew
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: wrapper
+          gradle-version: 8.10
           cache-read-only: false
       - name: Build Forge
         run: ./gradlew :forge:build --no-daemon
@@ -39,7 +39,7 @@ jobs:
         run: chmod +x gradlew
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: wrapper
+          gradle-version: 8.10
           cache-read-only: false
       - name: Build NeoForge
         run: ./gradlew :neoforge:build --no-daemon
