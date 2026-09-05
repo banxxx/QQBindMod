@@ -33,7 +33,7 @@ config/qqbind/
 !src/main/templates/**/*.toml
 !src/main/resources/**/*.toml
 !common-src/**/*.json?
-!gradle.properties   # 不排除 gradle.properties，它通常不含敏感信息
+!gradle.properties
 *.properties
 
 Thumbs.db

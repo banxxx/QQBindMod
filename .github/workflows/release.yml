@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 jobs:
   build:
@@ -23,7 +24,7 @@ jobs:
           java-version: ${{ matrix.java }}
       - uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: 8.10
+          gradle-version: 8.14.4
           cache-read-only: false
       - name: Build ${{ matrix.module }}
         run: gradle :${{ matrix.module }}:build --no-daemon
