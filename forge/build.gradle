@@ -1,0 +1,81 @@
+plugins {
+    id 'net.minecraftforge.gradle' version '[6.0.16,6.2)'
+}
+
+version = "${mod_version}-forge-${forge_minecraft_version}"
+group = mod_group_id
+
+sourceSets {
+    main {
+        java {
+            srcDirs 'src/main/java', '../common-src/src/main/java'
+        }
+        resources {
+            srcDirs 'src/main/resources'
+        }
+    }
+}
+
+minecraft {
+    mappings channel: 'official', version: project.forge_minecraft_version
+    runs {
+        server {
+            workingDirectory project.file('run')
+            mods {
+                qqbind {
+                    source sourceSets.main
+                }
+            }
+        }
+        client {
+            workingDirectory project.file('run')
+            mods {
+                qqbind {
+                    source sourceSets.main
+                }
+            }
+        }
+    }
+}
+
+dependencies {
+    minecraft "net.minecraftforge:forge:${forge_minecraft_version}-${forge_version}"
+}
+
+processResources {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    def replaceProperties = [
+            minecraft_version        : forge_minecraft_version,
+            minecraft_version_range  : forge_minecraft_version_range,
+            forge_version            : forge_version,
+            forge_version_range      : forge_version_range,
+            loader_version_range     : loader_version_range,
+            mod_id                   : mod_id,
+            mod_name                 : mod_name,
+            mod_license              : mod_license,
+            mod_version              : mod_version,
+            mod_authors              : mod_authors,
+            mod_description          : '',
+            version                  : project.version
+    ]
+    inputs.properties replaceProperties
+    filesMatching('META-INF/mods.toml') {
+        expand replaceProperties
+    }
+}
+
+jar {
+    manifest {
+        attributes([
+                "Specification-Title"   : mod_id,
+                "Specification-Vendor"  : mod_authors,
+                "Specification-Version" : "1",
+                "Implementation-Title"  : project.name,
+                "Implementation-Version": project.jar.archiveVersion,
+                "Implementation-Vendor" : mod_authors,
+                "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ")
+        ])
+    }
+    finalizedBy 'reobfJar'
+}

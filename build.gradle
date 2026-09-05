@@ -1,0 +1,21 @@
+subprojects {
+    apply plugin: 'java'
+
+    group = rootProject.mod_group_id
+    version = rootProject.mod_version
+
+    repositories {
+        mavenCentral()
+        maven { url = 'https://maven.minecraftforge.net/' }
+        maven { url = 'https://maven.neoforged.net/releases/' }
+        maven { url = 'https://maven.aliyun.com/repository/public' }
+    }
+
+    java {
+        toolchain.languageVersion = JavaLanguageVersion.of(17)
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+    }
+}
