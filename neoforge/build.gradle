@@ -122,14 +122,6 @@ tasks.named('processResources', ProcessResources) {
     filesMatching('META-INF/neoforge.mods.toml') {
         expand replaceProperties
     }
-
-    doLast {
-        file('build/classes/java/main/META-INF').mkdirs()
-        copy {
-            from 'build/resources/main/META-INF/neoforge.mods.toml'
-            into 'build/classes/java/main/META-INF'
-        }
-    }
 }
 
 jar {
