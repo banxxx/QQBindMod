@@ -40,6 +40,7 @@ public class QQBindMod {
         // 注册事件处理器到 Forge 事件总线
         MinecraftForge.EVENT_BUS.register(new EventHandler());
         MinecraftForge.EVENT_BUS.register(new ServerCommands());
+        MinecraftForge.EVENT_BUS.register(new RestrictionHandler());
 
         LOGGER.info("QQBindMod (Forge) initialized!");
     }

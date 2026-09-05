@@ -3,7 +3,7 @@ package com.poso.qqbind.neoforge;
 import com.poso.qqbind.QQBindConfig;
 import com.poso.qqbind.neoforge.QQBindMod;
 import com.poso.qqbind.core.BindingManager;
-import com.poso.qqbind.core.CommandExecutor;
+import com.poso.qqbind.core.PlayerStateManager;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
@@ -28,7 +28,15 @@ public class EventHandler {
         if (player.hasPermissions(4)) return;
 
         if (!bindingManager.isBound(gameId)) {
-            CommandExecutor.disconnectPlayer(player, QQBindConfig.KICK_MESSAGE);
+            // 应用限制并发送提示（使用统一的 applyRestriction 方法）
+            PlayerStateManager.applyRestriction(player);
+        }
+    }
+
+    @SubscribeEvent
+    public void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) {
+            PlayerStateManager.removePlayer(player);
         }
     }
 }

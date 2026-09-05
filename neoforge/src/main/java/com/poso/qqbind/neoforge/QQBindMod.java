@@ -35,6 +35,7 @@ public class QQBindMod {
 
         NeoForge.EVENT_BUS.register(new EventHandler());
         NeoForge.EVENT_BUS.register(new ServerCommands());
+        NeoForge.EVENT_BUS.register(new RestrictionHandler());
 
         LOGGER.info("QQBindMod (NeoForge) initialized!");
     }

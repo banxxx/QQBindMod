@@ -3,7 +3,7 @@ package com.poso.qqbind.forge;
 import com.poso.qqbind.QQBindConfig;
 import com.poso.qqbind.forge.QQBindMod;
 import com.poso.qqbind.core.BindingManager;
-import com.poso.qqbind.core.CommandExecutor;
+import com.poso.qqbind.core.PlayerStateManager;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -28,8 +28,15 @@ public class EventHandler {
         if (player.hasPermissions(4)) return;
 
         if (!bindingManager.isBound(gameId)) {
-            // 使用配置中的自定义消息，支持颜色代码和换行
-            CommandExecutor.disconnectPlayer(player, QQBindConfig.KICK_MESSAGE);
+            // 应用限制并发送提示（使用统一的 applyRestriction 方法）
+            PlayerStateManager.applyRestriction(player);
+        }
+    }
+
+    @SubscribeEvent
+    public void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) {
+            PlayerStateManager.removePlayer(player);
         }
     }
 }
