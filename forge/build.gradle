@@ -16,6 +16,10 @@ sourceSets {
     }
 }
 
+base {
+    archivesName = mod_id
+}
+
 minecraft {
     mappings channel: 'official', version: project.forge_minecraft_version
     runs {
