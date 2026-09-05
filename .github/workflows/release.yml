@@ -24,26 +24,23 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+      - name: Validate Gradle Wrapper
+        uses: gradle/actions/wrapper-validation@v4
 
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v4
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
         with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', '**/gradle.properties') }}
-          restore-keys: ${{ runner.os }}-gradle-
+          gradle-version: wrapper
+          cache-read-only: false
 
       - name: Build Forge and NeoForge
-        run: ./gradlew :forge:build :neoforge:build
+        run: ./gradlew :forge:build :neoforge:build --no-daemon
 
       - name: Upload artifacts to Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            forge/build/libs/qqbind-*.jar
-            neoforge/build/libs/qqbind-*.jar
+            forge/build/libs/*.jar
+            neoforge/build/libs/*.jar
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
