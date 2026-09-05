@@ -10,8 +10,6 @@ out/
 
 .gradle/
 gradle-app.setting
-!gradle/wrapper/gradle-wrapper.jar
-!gradle/wrapper/gradle-wrapper.properties
 
 build/
 */build/
@@ -34,9 +32,9 @@ config/qqbind/
 *.json
 !src/main/templates/**/*.toml
 !src/main/resources/**/*.toml
-!common-src/**/*.json?  # 如果有需要保留的示例json可在此调整
-*.properties
+!common-src/**/*.json?
 !gradle.properties   # 不排除 gradle.properties，它通常不含敏感信息
+*.properties
 
 Thumbs.db
 .DS_Store
