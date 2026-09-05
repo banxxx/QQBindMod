@@ -131,3 +131,7 @@ tasks.named('processResources', ProcessResources) {
         }
     }
 }
+
+jar {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
