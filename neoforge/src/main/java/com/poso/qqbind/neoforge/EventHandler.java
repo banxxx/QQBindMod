@@ -1,10 +1,8 @@
 package com.poso.qqbind.neoforge;
 
 import com.poso.qqbind.QQBindConfig;
-import com.poso.qqbind.neoforge.QQBindMod;
 import com.poso.qqbind.core.BindingManager;
 import com.poso.qqbind.core.PlayerStateManager;
-import com.poso.qqbind.core.TokenManager;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;

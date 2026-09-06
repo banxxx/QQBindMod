@@ -1,11 +1,7 @@
 package com.poso.qqbind.forge;
 
-import com.poso.qqbind.QQBindConfig;
 import com.poso.qqbind.core.PlayerStateManager;
-import com.poso.qqbind.core.TokenManager;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.protocol.game.ClientboundSystemChatPacket;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.event.ServerChatEvent;
 import net.minecraftforge.event.TickEvent;

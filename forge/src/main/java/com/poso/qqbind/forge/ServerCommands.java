@@ -5,7 +5,6 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.poso.qqbind.QQBindConfig;
-import com.poso.qqbind.forge.QQBindMod;
 import com.poso.qqbind.core.BindingManager;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;

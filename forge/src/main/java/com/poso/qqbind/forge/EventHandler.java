@@ -1,10 +1,8 @@
 package com.poso.qqbind.forge;
 
 import com.poso.qqbind.QQBindConfig;
-import com.poso.qqbind.forge.QQBindMod;
 import com.poso.qqbind.core.BindingManager;
 import com.poso.qqbind.core.PlayerStateManager;
-import com.poso.qqbind.core.TokenManager;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;

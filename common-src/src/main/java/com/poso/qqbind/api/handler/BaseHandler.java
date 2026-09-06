@@ -38,7 +38,6 @@ public abstract class BaseHandler implements HttpHandler {
      */
     @Override
     public final void handle(HttpExchange exchange) {
-        LOGGER.info("=== BaseHandler.handle 收到请求: {} ===", exchange.getRequestURI());
         try {
             doHandle(exchange);
         } catch (Exception e) {

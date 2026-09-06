@@ -352,12 +352,11 @@ public class WebServer {
     /**
      * 广播处理器 - POST /api/broadcast
      * 请求体: {"message": "Hello"}
-     * 在游戏屏幕中央显示消息（Title），持续约5秒，不发送聊天栏
+     * 在游戏屏幕中央显示消息（Title）
      */
     private class BroadcastHandler extends BaseHandler {
         @Override
         protected void doHandle(HttpExchange exchange) throws Exception {
-            LOGGER.info("=== 111 BroadcastHandler.doHandle START ===");
 
             if (!validateMethod(exchange, "POST")) return;
             if (!validateAuth(exchange)) return;
