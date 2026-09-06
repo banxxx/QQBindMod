@@ -66,13 +66,9 @@ public class BindingManager {
                         LOGGER.info("玩家 {} 绑定成功，已解除限制", player.getScoreboardName());
 
                         // ---- 使用模板发送绑定成功通知 ----
-                        String title = QQBindConfig.formatMessage(QQBindConfig.BIND_SUCCESS_TITLE);
-                        String subtitle = QQBindConfig.formatMessage(QQBindConfig.BIND_SUCCESS_SUBTITLE);
-                        String actionBar = QQBindConfig.formatMessage(QQBindConfig.BIND_SUCCESS_ACTION_BAR);
-                        String chatMsg = QQBindConfig.formatMessage(QQBindConfig.BIND_SUCCESS_CHAT);
-
-                        player.connection.send(new ClientboundSystemChatPacket(
-                                Component.literal(chatMsg), false));
+                        String title = QQBindConfig.formatMessage(QQBindConfig.BIND_SUCCESS_TITLE, null);
+                        String subtitle = QQBindConfig.formatMessage(QQBindConfig.BIND_SUCCESS_SUBTITLE, null);
+                        String actionBar = QQBindConfig.formatMessage(QQBindConfig.BIND_SUCCESS_ACTION_BAR, null);
 
                         player.connection.send(new ClientboundSetTitleTextPacket(
                                 Component.literal(title)));
@@ -113,8 +109,10 @@ public class BindingManager {
             if (server != null) {
                 ServerPlayer player = server.getPlayerList().getPlayerByName(gameId);
                 if (player != null) {
-                    // 应用限制（旁观者模式 + 提示信息）
-                    PlayerStateManager.applyRestriction(player);
+                    // 1. 设置为受限状态（旁观者模式）
+                    PlayerStateManager.setRestricted(player, true);
+                    // 2. 发送受限提示消息（自动生成令牌）
+                    PlayerStateManager.sendRestrictionMessage(player);
                     LOGGER.info("玩家 {} 已被解绑，已应用限制", player.getScoreboardName());
                 }
             }
@@ -146,8 +144,10 @@ public class BindingManager {
             if (server != null) {
                 ServerPlayer player = server.getPlayerList().getPlayerByName(gameId);
                 if (player != null) {
-                    // 应用限制（旁观者模式 + 提示信息）
-                    PlayerStateManager.applyRestriction(player);
+                    // 1. 设置为受限状态（旁观者模式）
+                    PlayerStateManager.setRestricted(player, true);
+                    // 2. 发送受限提示消息（自动生成令牌）
+                    PlayerStateManager.sendRestrictionMessage(player);
                     LOGGER.info("玩家 {} 已被解绑，已应用限制", player.getScoreboardName());
                 }
             }

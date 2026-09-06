@@ -3,6 +3,7 @@ package com.poso.qqbind.api;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import com.poso.qqbind.core.TokenManager;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
@@ -80,6 +81,7 @@ public class WebServer {
             server.createContext("/api/stats", new StatsHandler());
             server.createContext("/api/tps", new TpsHandler());
             server.createContext("/api/broadcast", new BroadcastHandler());
+            server.createContext("/api/validate_token", new ValidateTokenHandler());
 
             server.setExecutor(Executors.newCachedThreadPool());
             server.start();
@@ -151,11 +153,12 @@ public class WebServer {
         return end == -1 ? query.substring(start) : query.substring(start, end);
     }
 
-    // ========== 处理器 ==========
 
     /**
      * 绑定处理器 - POST /api/bind
-     * 请求体: {"qq": "123456789", "gameId": "player"}
+     * 支持两种模式：
+     * 1) 传统模式：{"qq": "123456789", "gameId": "player"}  （需提供 gameId）
+     * 2) 令牌模式：{"token": "778899", "qq": "123456789"}   （令牌包含 gameId 和 serverId）
      */
     private class BindHandler implements HttpHandler {
         @Override
@@ -176,20 +179,49 @@ public class WebServer {
 
             try {
                 JsonObject json = gson.fromJson(body, JsonObject.class);
-                String qq = json.get("qq").getAsString();
-                String gameId = json.get("gameId").getAsString();
+                String qq = json.has("qq") ? json.get("qq").getAsString() : null;
+                String gameId = json.has("gameId") ? json.get("gameId").getAsString() : null;
+                String token = json.has("token") ? json.get("token").getAsString() : null;
 
-                if (qq == null || qq.isEmpty() || gameId == null || gameId.isEmpty()) {
-                    sendResponse(exchange, 400, "Missing qq or gameId", false);
+                // 必须提供 qq
+                if (qq == null || qq.isEmpty()) {
+                    sendResponse(exchange, 400, "Missing qq", false);
                     return;
                 }
 
-                BindingManager.BindResult result = bindingManager.bind(qq, gameId);
-                if (result.success) {
-                    sendResponse(exchange, 200, result.message, true);
-                } else {
-                    sendResponse(exchange, 400, result.message, false);
+                // 模式1：传统模式（提供 gameId）
+                if (gameId != null && !gameId.isEmpty()) {
+                    BindingManager.BindResult result = bindingManager.bind(qq, gameId);
+                    if (result.success) {
+                        sendResponse(exchange, 200, result.message, true);
+                    } else {
+                        sendResponse(exchange, 400, result.message, false);
+                    }
+                    return;
                 }
+
+                // 模式2：令牌模式（提供 token）
+                if (token != null && !token.isEmpty()) {
+                    // 验证令牌
+                    String gameIdFromToken = TokenManager.validateAndUseToken(token, qq);
+                    if (gameIdFromToken == null) {
+                        sendResponse(exchange, 400, "无效或已过期的令牌", false);
+                        return;
+                    }
+                    // 执行绑定
+                    BindingManager.BindResult result = bindingManager.bind(qq, gameIdFromToken);
+                    if (result.success) {
+                        sendResponse(exchange, 200, result.message, true);
+                    } else {
+                        // 如果绑定失败（理论上不应发生，因为令牌已验证），返回错误
+                        sendResponse(exchange, 400, result.message, false);
+                    }
+                    return;
+                }
+
+                // 既无 gameId 也无 token
+                sendResponse(exchange, 400, "Missing gameId or token", false);
+
             } catch (Exception e) {
                 LOGGER.error("Error processing bind request", e);
                 sendResponse(exchange, 500, "Internal Server Error: " + e.getMessage(), false);
@@ -485,7 +517,55 @@ public class WebServer {
         }
     }
 
-    // ========== TPS 计算（使用反射） ==========
+    /**
+     * 令牌验证处理器 - GET /api/validate_token
+     * 用于机器人端查询令牌的有效性，并返回对应的 gameId 和 serverId。
+     * 请求参数: ?token=123456
+     */
+    private class ValidateTokenHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            // 仅允许 GET 请求
+            if (validateRequestMethod(exchange, "GET")) {
+                sendResponse(exchange, 405, "Method Not Allowed", false);
+                return;
+            }
+            // 需要授权
+            if (isUnauthorized(exchange)) {
+                sendResponse(exchange, 401, "Unauthorized", false);
+                return;
+            }
+
+            String query = exchange.getRequestURI().getQuery();
+            String token = getQueryParam(query, "token");
+
+            if (token == null || token.isEmpty()) {
+                JsonObject error = new JsonObject();
+                error.addProperty("valid", false);
+                error.addProperty("message", "Missing token parameter");
+                sendJson(exchange, 400, error);
+                return;
+            }
+
+            // 验证令牌（不消耗）
+            TokenManager.TokenInfo info = TokenManager.validateTokenOnly(token);
+            if (info == null) {
+                JsonObject error = new JsonObject();
+                error.addProperty("valid", false);
+                error.addProperty("message", "令牌不存在或已过期");
+                sendJson(exchange, 404, error);
+                return;
+            }
+
+            // 构建成功响应
+            JsonObject response = new JsonObject();
+            response.addProperty("valid", true);
+            response.addProperty("gameId", info.getGameId());
+            response.addProperty("serverId", info.getServerId());
+            sendJson(exchange, 200, response);
+        }
+    }
+
 
     /**
      * 计算当前服务器的 TPS（基于 tickTimes 数组）

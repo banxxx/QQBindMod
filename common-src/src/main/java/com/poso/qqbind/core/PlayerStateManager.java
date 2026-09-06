@@ -23,7 +23,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class PlayerStateManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(PlayerStateManager.class);
 
-    // 存储受限玩家的 UUID，使用 ConcurrentHashMap 保证线程安全
+    // 存储受限玩家的 UUID
     private static final Map<UUID, Boolean> restrictedPlayers = new ConcurrentHashMap<>();
 
     /**
@@ -35,12 +35,10 @@ public class PlayerStateManager {
         UUID uuid = player.getUUID();
         if (restricted) {
             restrictedPlayers.put(uuid, true);
-            // 将玩家游戏模式改为旁观者，无法交互
             player.setGameMode(GameType.SPECTATOR);
             LOGGER.info("玩家 {} 已被限制（未绑定），切换为旁观者模式", player.getScoreboardName());
         } else {
             restrictedPlayers.remove(uuid);
-            // 恢复为生存模式
             player.setGameMode(GameType.SURVIVAL);
             LOGGER.info("玩家 {} 解除限制，恢复生存模式", player.getScoreboardName());
         }
@@ -61,35 +59,40 @@ public class PlayerStateManager {
         if (restrictedPlayers.remove(uuid) != null) {
             LOGGER.info("玩家 {} 退出，已清理受限状态", player.getScoreboardName());
         }
+        // 同时清理令牌
+        TokenManager.removeTokenForPlayer(player);
     }
 
     /**
-     * 应用限制状态并发送提示信息（使用配置模板）。
-     * 用于玩家登录时或解绑后重新限制。
+     * 向受限玩家发送完整提示消息（Title + Subtitle + ActionBar + Chat），
+     * 包含令牌信息。此方法自动获取或刷新令牌。
      * @param player 目标玩家
      */
-    public static void applyRestriction(ServerPlayer player) {
-        // 设置为受限状态（旁观者模式）
-        setRestricted(player, true);
+    public static void sendRestrictionMessage(ServerPlayer player) {
+        // 获取或刷新令牌
+        String token = TokenManager.getOrRefreshToken(player);
 
-        // ---- 使用配置模板发送完整提示信息 ----
-        String title = QQBindConfig.formatMessage(QQBindConfig.TITLE_TEMPLATE);
-        String subtitle = QQBindConfig.formatMessage(QQBindConfig.SUBTITLE_TEMPLATE);
-        String actionBar = QQBindConfig.formatMessage(QQBindConfig.ACTION_BAR_TEMPLATE);
-        String chatMsg = QQBindConfig.formatMessage(QQBindConfig.CHAT_TEMPLATE);
+        // 构建消息
+        String title = QQBindConfig.formatMessage(QQBindConfig.TITLE_TEMPLATE, token);
+        String subtitle = QQBindConfig.formatMessage(QQBindConfig.SUBTITLE_TEMPLATE, token);
+        String actionBar = QQBindConfig.formatMessage(QQBindConfig.ACTION_BAR_TEMPLATE, token);
 
-        // Title（大标题）
+        // 发送 Title
         player.connection.send(new ClientboundSetTitleTextPacket(Component.literal(title)));
         player.connection.send(new ClientboundSetSubtitleTextPacket(Component.literal(subtitle)));
-        // 显示时长：淡入 10 tick，停留 100 tick，淡出 20 tick
         player.connection.send(new ClientboundSetTitlesAnimationPacket(10, 100, 20));
 
-        // ActionBar（底部提示）
+        // ActionBar
         player.connection.send(new ClientboundSetActionBarTextPacket(Component.literal(actionBar)));
 
-        // Chat 消息
-        player.connection.send(new ClientboundSystemChatPacket(Component.literal(chatMsg), false));
+    }
 
-        LOGGER.info("已向玩家 {} 发送受限提示", player.getScoreboardName());
+    /**
+     * 发送简短的 ActionBar 提醒（用于操作拦截时快速反馈）
+     */
+    public static void sendActionBarReminder(ServerPlayer player) {
+        String token = TokenManager.getOrRefreshToken(player);
+        String actionBar = QQBindConfig.formatMessage(QQBindConfig.ACTION_BAR_TEMPLATE, token);
+        player.connection.send(new ClientboundSetActionBarTextPacket(Component.literal(actionBar)));
     }
 }
