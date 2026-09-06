@@ -1,13 +1,14 @@
 package com.poso.qqbind.neoforge;
 
+import com.mojang.logging.LogUtils;
 import com.poso.qqbind.QQBindConfig;
 import com.poso.qqbind.core.BindingManager;
 import com.poso.qqbind.core.PlayerStateManager;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import org.slf4j.Logger;
 
-import static com.mojang.text2speech.Narrator.LOGGER;
 
 /**
  * 事件监听类，用于处理玩家登录事件以实施绑定验证.
@@ -17,6 +18,9 @@ import static com.mojang.text2speech.Narrator.LOGGER;
  * @since : 1.0
  */
 public class EventHandler {
+
+    private static final Logger LOGGER = LogUtils.getLogger();
+
     @SubscribeEvent
     public void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;

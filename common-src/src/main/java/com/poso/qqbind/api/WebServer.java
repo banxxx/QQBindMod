@@ -106,8 +106,8 @@ public class WebServer {
     private class BindHandler extends BaseHandler {
         @Override
         protected void doHandle(HttpExchange exchange) throws Exception {
-            if (validateMethod(exchange, "POST")) return;
-            if (validateAuth(exchange)) return;
+            if (!validateMethod(exchange, "POST")) return;
+            if (!validateAuth(exchange)) return;
 
             String body = readRequestBody(exchange);
             JsonObject json = gson.fromJson(body, JsonObject.class);
@@ -165,8 +165,8 @@ public class WebServer {
     private class UnbindHandler extends BaseHandler {
         @Override
         protected void doHandle(HttpExchange exchange) throws Exception {
-            if (validateMethod(exchange, "POST")) return;
-            if (validateAuth(exchange)) return;
+            if (!validateMethod(exchange, "POST")) return;
+            if (!validateAuth(exchange)) return;
 
             String body = readRequestBody(exchange);
             JsonObject json = gson.fromJson(body, JsonObject.class);
@@ -201,8 +201,8 @@ public class WebServer {
     private class CheckHandler extends BaseHandler {
         @Override
         protected void doHandle(HttpExchange exchange) throws Exception {
-            if (validateMethod(exchange, "GET")) return;
-            if (validateAuth(exchange)) return;
+            if (!validateMethod(exchange, "GET")) return;
+            if (!validateAuth(exchange)) return;
 
             String query = exchange.getRequestURI().getQuery();
             String gameId = getQueryParam(query, "gameId");
@@ -240,8 +240,8 @@ public class WebServer {
     private class StatusHandler extends BaseHandler {
         @Override
         protected void doHandle(HttpExchange exchange) throws Exception {
-            if (validateMethod(exchange, "GET")) return;
-            if (validateAuth(exchange)) return;
+            if (!validateMethod(exchange, "GET")) return;
+            if (!validateAuth(exchange)) return;
 
             MinecraftServer server = ServerProviderHolder.get().getCurrentServer();
             if (server == null) {
@@ -292,8 +292,8 @@ public class WebServer {
     private class StatsHandler extends BaseHandler {
         @Override
         protected void doHandle(HttpExchange exchange) throws Exception {
-            if (validateMethod(exchange, "GET")) return;
-            if (validateAuth(exchange)) return;
+            if (!validateMethod(exchange, "GET")) return;
+            if (!validateAuth(exchange)) return;
 
             String path = exchange.getRequestURI().getPath();
             String[] segments = path.split("/");
@@ -334,8 +334,8 @@ public class WebServer {
     private class TpsHandler extends BaseHandler {
         @Override
         protected void doHandle(HttpExchange exchange) throws Exception {
-            if (validateMethod(exchange, "GET")) return;
-            if (validateAuth(exchange)) return;
+            if (!validateMethod(exchange, "GET")) return;
+            if (!validateAuth(exchange)) return;
 
             MinecraftServer server = ServerProviderHolder.get().getCurrentServer();
             if (server == null) {
@@ -403,8 +403,8 @@ public class WebServer {
     private class ValidateTokenHandler extends BaseHandler {
         @Override
         protected void doHandle(HttpExchange exchange) throws Exception {
-            if (validateMethod(exchange, "GET")) return;
-            if (validateAuth(exchange)) return;
+            if (!validateMethod(exchange, "GET")) return;
+            if (!validateAuth(exchange)) return;
 
             String query = exchange.getRequestURI().getQuery();
             String token = getQueryParam(query, "token");
