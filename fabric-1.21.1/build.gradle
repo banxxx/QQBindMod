@@ -1,0 +1,79 @@
+plugins {
+    id 'fabric-loom' version '1.10-SNAPSHOT'
+    id 'java-library'
+}
+
+version = "${mod_version}-fabric-${fabric_minecraft_version_121}"
+group = mod_group_id
+
+base {
+    archivesName = mod_id
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir 'src/main/java'
+            srcDir '../common-src/src/main/java'
+        }
+        resources {
+            srcDir 'src/main/resources'
+        }
+    }
+}
+
+repositories {
+    mavenCentral()
+    maven { url 'https://maven.fabricmc.net/' }
+    maven { url 'https://maven.aliyun.com/repository/public' }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${fabric_minecraft_version_121}"
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${fabric_loader_version_121}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version_121}"
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(21)   // 1.21.1 使用 Java 21
+    withSourcesJar()
+}
+
+// 其余配置与 1.20.1 相同（processResources、jar 等），仅 expand 的 minecraft_version 不同
+processResources {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    filesMatching('fabric.mod.json') {
+        expand(
+                'mod_id': mod_id,
+                'mod_name': mod_name,
+                'mod_version': mod_version,
+                'mod_authors': mod_authors,
+                'mod_description': 'QQ绑定模组 (Fabric)',
+                'minecraft_version': fabric_minecraft_version_121,
+                'mod_license': mod_license
+        )
+    }
+}
+
+jar {
+    from('src/main/java') {
+        include 'com/poso/qqbind/fabric/**'
+    }
+    from('../common-src/src/main/java') {
+        include 'com/poso/qqbind/**'
+        exclude 'com/poso/qqbind/forge/**'
+        exclude 'com/poso/qqbind/neoforge/**'
+    }
+    manifest {
+        attributes(
+                'Implementation-Title': project.name,
+                'Implementation-Version': project.version,
+                'Implementation-Vendor': mod_authors
+        )
+    }
+}
+
+tasks.named('sourcesJar') {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}

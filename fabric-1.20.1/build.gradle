@@ -1,0 +1,85 @@
+plugins {
+    id 'fabric-loom' version '1.10-SNAPSHOT'
+    id 'java-library'
+}
+
+version = "${mod_version}-fabric-${fabric_minecraft_version_120}"
+group = mod_group_id
+
+base {
+    archivesName = mod_id
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir 'src/main/java'
+            srcDir '../common-src/src/main/java'
+        }
+        resources {
+            srcDir 'src/main/resources'
+        }
+    }
+}
+
+repositories {
+    mavenCentral()
+    maven { url 'https://maven.fabricmc.net/' }
+    maven { url 'https://maven.aliyun.com/repository/public' }
+}
+
+dependencies {
+    // Fabric Loader
+    minecraft "com.mojang:minecraft:${fabric_minecraft_version_120}"
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${fabric_loader_version_120}"
+
+    // Fabric API（包含我们需要的 events, command, networking 等）
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version_120}"
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(17)   // 1.20.1 使用 Java 17
+    withSourcesJar()
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+processResources {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    filesMatching('fabric.mod.json') {
+        expand(
+                'mod_id': mod_id,
+                'mod_name': mod_name,
+                'mod_version': mod_version,
+                'mod_authors': mod_authors,
+                'mod_description': 'QQ绑定模组 (Fabric)',
+                'minecraft_version': fabric_minecraft_version_120,
+                'mod_license': mod_license
+        )
+    }
+}
+
+jar {
+    from('src/main/java') {
+        include 'com/poso/qqbind/fabric/**'
+    }
+    from('../common-src/src/main/java') {
+        include 'com/poso/qqbind/**'
+        exclude 'com/poso/qqbind/forge/**'
+        exclude 'com/poso/qqbind/neoforge/**'
+    }
+    manifest {
+        attributes(
+                'Implementation-Title': project.name,
+                'Implementation-Version': project.version,
+                'Implementation-Vendor': mod_authors
+        )
+    }
+}
+
+tasks.named('sourcesJar') {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
