@@ -13,5 +13,10 @@ plugins {
 }
 
 rootProject.name = 'QQBindMod'
-include('forge', 'neoforge')
-include('fabric-1.20.1', 'fabric-1.21.1')
+
+def allModules = ['forge', 'neoforge', 'fabric-1.20.1', 'fabric-1.21.1']
+
+def buildModule = System.getenv('BUILD_MODULE')
+def modulesToInclude = buildModule ? allModules.findAll { it == buildModule } : allModules
+
+modulesToInclude.each { include(it) }
