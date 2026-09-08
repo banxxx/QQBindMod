@@ -37,7 +37,6 @@ dependencies {
 
 java {
     toolchain.languageVersion = JavaLanguageVersion.of(21)   // 1.21.1 使用 Java 21
-    withSourcesJar()
 }
 
 // 其余配置与 1.20.1 相同（processResources、jar 等），仅 expand 的 minecraft_version 不同
@@ -74,6 +73,6 @@ jar {
     }
 }
 
-tasks.named('sourcesJar') {
+tasks.withType(AbstractArchiveTask).configureEach {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
