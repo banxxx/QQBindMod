@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 
 /**
  * 事件监听类，用于处理玩家登录事件以实施绑定验证.
+ *
  * @author : Ban
  * @version : 1.0
  * @createTime: 2026-09-05  13:23
@@ -41,9 +42,7 @@ public class EventHandler {
 
             LOGGER.info("玩家 {} 未绑定，已应用限制并发送提示", player.getScoreboardName());
         } else {
-            if (PlayerStateManager.isRestricted(player)) {
-                PlayerStateManager.setRestricted(player, false);
-            }
+            PlayerStateManager.setRestricted(player, false);
         }
     }
 

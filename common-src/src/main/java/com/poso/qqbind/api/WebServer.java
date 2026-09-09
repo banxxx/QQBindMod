@@ -9,6 +9,8 @@ import com.poso.qqbind.api.exception.ResourceNotFoundException;
 import com.poso.qqbind.api.handler.BaseHandler;
 import com.poso.qqbind.api.response.ErrorCode;
 import com.poso.qqbind.core.BindingManager;
+import com.poso.qqbind.core.CacheManager;
+import com.poso.qqbind.core.PlayerStateManager;
 import com.poso.qqbind.core.TokenManager;
 import com.poso.qqbind.server.ServerProviderHolder;
 import com.sun.net.httpserver.HttpExchange;
@@ -79,6 +81,7 @@ public class WebServer {
             server.createContext("/api/tps", new TpsHandler());
             server.createContext("/api/broadcast", new BroadcastHandler());
             server.createContext("/api/validate_token", new ValidateTokenHandler());
+            server.createContext("/api/cache/invalidate", new CacheInvalidateHandler());
 
             server.setExecutor(Executors.newCachedThreadPool());
             server.start();
@@ -422,6 +425,64 @@ public class WebServer {
             data.addProperty("gameId", info.getGameId());
             data.addProperty("serverId", info.getServerId());
             sendSuccess(exchange, data);
+        }
+    }
+
+    private class CacheInvalidateHandler extends BaseHandler {
+        @Override
+        protected void doHandle(HttpExchange exchange) throws Exception {
+            if (!validateMethod(exchange, "POST")) return;
+            if (!validateAuth(exchange)) return;
+
+            String body = readRequestBody(exchange);
+            JsonObject json = gson.fromJson(body, JsonObject.class);
+            String gameId = json.has("gameId") ? json.get("gameId").getAsString() : null;
+            if (gameId == null || gameId.isEmpty()) {
+                sendError(exchange, 400, "Missing gameId");
+                return;
+            }
+
+            // 1. 清除本地缓存（确保后续查询走数据库）
+            CacheManager.invalidate(gameId);
+            LOGGER.info("Cache invalidated for gameId: {}", gameId);
+
+            // 2. 获取在线玩家
+            MinecraftServer server = ServerProviderHolder.get().getCurrentServer();
+            if (server == null) {
+                sendSuccess(exchange);
+                return;
+            }
+            ServerPlayer player = server.getPlayerList().getPlayerByName(gameId);
+            if (player == null) {
+                LOGGER.info("Player {} is not online.", gameId);
+                sendSuccess(exchange);
+                return;
+            }
+
+            // 3. 查询当前绑定状态（缓存已清，会查数据库）
+            boolean isBound = bindingManager.isBound(gameId);
+
+            // 4. 根据绑定状态实时调整玩家限制
+            if (isBound) {
+                // 已绑定：如果玩家受限，则解除限制
+                if (PlayerStateManager.isRestricted(player)) {
+                    PlayerStateManager.setRestricted(player, false);
+                    LOGGER.info("Player {} is now bound, restriction removed.", gameId);
+                } else {
+                    LOGGER.info("Player {} is bound and already unrestricted.", gameId);
+                }
+            } else {
+                // 未绑定：如果玩家未受限，则应用限制
+                if (!PlayerStateManager.isRestricted(player)) {
+                    PlayerStateManager.setRestricted(player, true);
+                    PlayerStateManager.sendRestrictionMessage(player);
+                    LOGGER.info("Player {} is now unbound, restriction applied.", gameId);
+                } else {
+                    LOGGER.info("Player {} is unbound and already restricted.", gameId);
+                }
+            }
+
+            sendSuccess(exchange);
         }
     }
 

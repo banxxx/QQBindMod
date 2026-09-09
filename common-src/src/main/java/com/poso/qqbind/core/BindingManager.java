@@ -3,6 +3,8 @@ package com.poso.qqbind.core;
 import com.poso.qqbind.QQBindConfig;
 import com.poso.qqbind.server.ServerProviderHolder;
 import com.poso.qqbind.storage.DataStorage;
+import com.poso.qqbind.storage.JsonStorage;
+import com.poso.qqbind.storage.RemoteStorage;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundSetActionBarTextPacket;
 import net.minecraft.network.protocol.game.ClientboundSetSubtitleTextPacket;
@@ -25,10 +27,13 @@ import java.util.Map;
 public class BindingManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(BindingManager.class);
     private final DataStorage storage;
+    private DataStorage localFallback; // 仅当使用 hybrid 时保留本地引用
 
     public BindingManager(DataStorage storage) {
         this.storage = storage;
-        storage.load();
+        // 如果配置为 hybrid，则 primaryStorage 应该是 RemoteStorage，但我们仍保留 JsonStorage 作为备用
+        // 但 RemoteStorage 内部已有 fallback，所以这里直接使用 primaryStorage
+        this.storage.load();
     }
 
     /**
@@ -86,6 +91,18 @@ public class BindingManager {
 
         LOGGER.info("Bound QQ {} to game ID {}", qq, gameId);
         return new BindResult(true, "绑定成功！您现在可以登录服务器了。");
+    }
+
+    public void close() {
+        if (storage instanceof RemoteStorage) {
+            ((RemoteStorage) storage).close();
+        } else if (storage instanceof JsonStorage) {
+            // JsonStorage 无需关闭
+        }
+    }
+
+    public DataStorage getStorage() {
+        return storage;
     }
 
     /**
@@ -162,6 +179,7 @@ public class BindingManager {
      * 检查游戏 ID 是否已绑定
      */
     public boolean isBound(String gameId) {
+        LOGGER.info("isBound({}) = {}", gameId, storage.getQQ(gameId) != null);
         return storage.getQQ(gameId) != null;
     }
 

@@ -44,6 +44,10 @@ minecraft {
 
 dependencies {
     minecraft "net.minecraftforge:forge:${forge_minecraft_version}-${forge_version}"
+    // JDBC 驱动 (MySQL Connector/J)
+    minecraftLibrary 'mysql:mysql-connector-java:8.0.33'
+    // HikariCP 连接池
+    minecraftLibrary 'com.zaxxer:HikariCP:5.0.1'
 }
 
 processResources {

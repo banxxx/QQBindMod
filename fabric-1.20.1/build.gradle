@@ -33,9 +33,10 @@ dependencies {
     minecraft "com.mojang:minecraft:${fabric_minecraft_version_120}"
     mappings loom.officialMojangMappings()
     modImplementation "net.fabricmc:fabric-loader:${fabric_loader_version_120}"
-
     // Fabric API（包含我们需要的 events, command, networking 等）
     modImplementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version_120}"
+    include 'mysql:mysql-connector-java:8.0.33'
+    include 'com.zaxxer:HikariCP:5.0.1'
 }
 
 java {

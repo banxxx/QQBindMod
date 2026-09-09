@@ -4,7 +4,9 @@ import com.poso.qqbind.QQBindConfig;
 import com.poso.qqbind.api.WebServer;
 import com.poso.qqbind.core.BindingManager;
 import com.poso.qqbind.server.ServerProviderHolder;
+import com.poso.qqbind.storage.DataStorage;
 import com.poso.qqbind.storage.JsonStorage;
+import com.poso.qqbind.storage.RemoteStorage;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
@@ -30,7 +32,17 @@ public class FabricModInitializer implements ModInitializer {
         QQBindConfig.load();
 
         // 3. 初始化存储和绑定管理器
-        JsonStorage storage = new JsonStorage();
+        // 根据配置选择存储实现
+        DataStorage storage;
+        String mode = QQBindConfig.STORAGE_MODE;
+        if ("remote".equalsIgnoreCase(mode) || "hybrid".equalsIgnoreCase(mode)) {
+            storage = new RemoteStorage();
+            LOGGER.info("Using RemoteStorage (mode: {})", mode);
+        } else {
+            storage = new JsonStorage();
+            LOGGER.info("Using local JsonStorage");
+        }
+
         bindingManager = new BindingManager(storage);
 
         // 4. 启动 HTTP API 服务
@@ -59,6 +71,9 @@ public class FabricModInitializer implements ModInitializer {
 
         // 9. 注册服务器停止时关闭 HTTP 服务，并清理缓存的服务器实例
         ServerLifecycleEvents.SERVER_STOPPING.register((server) -> {
+            if (bindingManager != null) {
+                bindingManager.close();
+            }
             if (webServer != null) {
                 webServer.stop();
                 LOGGER.info("HTTP server stopped");

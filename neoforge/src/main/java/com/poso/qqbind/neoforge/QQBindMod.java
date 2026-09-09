@@ -5,11 +5,15 @@ import com.poso.qqbind.QQBindConfig;
 import com.poso.qqbind.api.WebServer;
 import com.poso.qqbind.core.BindingManager;
 import com.poso.qqbind.server.ServerProviderHolder;
+import com.poso.qqbind.storage.DataStorage;
 import com.poso.qqbind.storage.JsonStorage;
+import com.poso.qqbind.storage.RemoteStorage;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import org.slf4j.Logger;
 
 /**
@@ -33,6 +37,7 @@ public class QQBindMod {
     public QQBindMod(IEventBus modEventBus) {
         modEventBus.addListener(this::commonSetup);
 
+        NeoForge.EVENT_BUS.register(this);
         NeoForge.EVENT_BUS.register(new EventHandler());
         NeoForge.EVENT_BUS.register(new ServerCommands());
         NeoForge.EVENT_BUS.register(new RestrictionHandler());
@@ -43,10 +48,16 @@ public class QQBindMod {
     private void commonSetup(final FMLCommonSetupEvent event) {
         event.enqueueWork(() -> {
             ServerProviderHolder.setProvider(new NeoForgeServerProvider());
-
             QQBindConfig.load();
 
-            JsonStorage storage = new JsonStorage();
+            DataStorage storage;
+            if ("local".equalsIgnoreCase(QQBindConfig.STORAGE_MODE)) {
+                storage = new JsonStorage();
+                LOGGER.info("Using local JsonStorage.");
+            } else {
+                storage = new RemoteStorage();
+                LOGGER.info("Using RemoteStorage with TiDB.");
+            }
             bindingManager = new BindingManager(storage);
 
             webServer = new WebServer(bindingManager);
@@ -54,6 +65,17 @@ public class QQBindMod {
 
             LOGGER.info("QQBindMod common setup completed! HTTP server started on port {}", QQBindConfig.HTTP_PORT);
         });
+    }
+
+    @SubscribeEvent
+    public void onServerStopped(ServerStoppedEvent event) {
+        if (bindingManager != null) {
+            bindingManager.close();
+        }
+        if (webServer != null) {
+            webServer.stop();
+        }
+        LOGGER.info("QQBindMod resources released.");
     }
 
     public static BindingManager getBindingManager() {

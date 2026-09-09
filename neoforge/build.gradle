@@ -73,6 +73,10 @@ configurations {
 }
 
 dependencies {
+    // JDBC 驱动 (MySQL Connector/J)
+    implementation 'mysql:mysql-connector-java:8.0.33'
+    // HikariCP 连接池
+    implementation 'com.zaxxer:HikariCP:5.0.1'
 }
 
 publishing {

@@ -33,7 +33,7 @@ public class QQBindConfig {
     public static String API_TOKEN = "change-me-to-a-random-token";
     public static boolean ENABLE_WHITELIST_CHECK = true;
     public static String DATA_FILE_PATH = "qqbind/bindings.json";
-    public static String SERVER_ID = "default";          // 新增：服务器唯一标识
+    public static String SERVER_ID = "default";          // 服务器唯一标识
 
     // 消息模板配置
     public static String QQ_GROUP = "123456789";
@@ -43,6 +43,13 @@ public class QQBindConfig {
     public static String BIND_SUCCESS_TITLE = "§a绑定成功！";
     public static String BIND_SUCCESS_SUBTITLE = "§e祝您游戏愉快";
     public static String BIND_SUCCESS_ACTION_BAR = "§a已解除限制，您可以正常游戏了";
+
+    // 存储相关配置
+    public static String STORAGE_MODE = "hybrid";   // "local" | "remote" | "hybrid"
+    public static String JDBC_URL = "jdbc:mysql://<host>:4000/qqbind_db?useSSL=true&serverTimezone=UTC";
+    public static String DB_USER = "";
+    public static String DB_PASSWORD = "";
+    public static int CACHE_TTL_SECONDS = 60;
 
     /**
      * 加载或创建配置文件
@@ -88,6 +95,12 @@ public class QQBindConfig {
         if (json.has("bindSuccessTitle")) BIND_SUCCESS_TITLE = json.get("bindSuccessTitle").getAsString();
         if (json.has("bindSuccessSubtitle")) BIND_SUCCESS_SUBTITLE = json.get("bindSuccessSubtitle").getAsString();
         if (json.has("bindSuccessActionBar")) BIND_SUCCESS_ACTION_BAR = json.get("bindSuccessActionBar").getAsString();
+
+        if (json.has("storageMode")) STORAGE_MODE = json.get("storageMode").getAsString();
+        if (json.has("jdbcUrl")) JDBC_URL = json.get("jdbcUrl").getAsString();
+        if (json.has("dbUser")) DB_USER = json.get("dbUser").getAsString();
+        if (json.has("dbPassword")) DB_PASSWORD = json.get("dbPassword").getAsString();
+        if (json.has("cacheTtlSeconds")) CACHE_TTL_SECONDS = json.get("cacheTtlSeconds").getAsInt();
     }
 
     /**
@@ -115,6 +128,11 @@ public class QQBindConfig {
             defaultJson.addProperty("bindSuccessTitle", BIND_SUCCESS_TITLE);
             defaultJson.addProperty("bindSuccessSubtitle", BIND_SUCCESS_SUBTITLE);
             defaultJson.addProperty("bindSuccessActionBar", BIND_SUCCESS_ACTION_BAR);
+            defaultJson.addProperty("storageMode", STORAGE_MODE);
+            defaultJson.addProperty("jdbcUrl", JDBC_URL);
+            defaultJson.addProperty("dbUser", DB_USER);
+            defaultJson.addProperty("dbPassword", DB_PASSWORD);
+            defaultJson.addProperty("cacheTtlSeconds", CACHE_TTL_SECONDS);
 
             String jsonStr = GSON.toJson(defaultJson);
             Files.writeString(configPath, jsonStr);

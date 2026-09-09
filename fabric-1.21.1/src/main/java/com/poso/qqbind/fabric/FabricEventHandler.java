@@ -34,10 +34,7 @@ public class FabricEventHandler {
             LOGGER.info("玩家 {} 未绑定，已应用限制并发送提示", gameId);
         } else {
             // 已绑定，但若之前因某种原因仍处于受限状态，解除限制
-            if (PlayerStateManager.isRestricted(player)) {
-                PlayerStateManager.setRestricted(player, false);
-                LOGGER.info("玩家 {} 已绑定，解除限制", gameId);
-            }
+            PlayerStateManager.setRestricted(player, false);
         }
     }
 
