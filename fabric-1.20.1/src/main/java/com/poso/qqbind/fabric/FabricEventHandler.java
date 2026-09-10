@@ -2,6 +2,7 @@ package com.poso.qqbind.fabric;
 
 import com.poso.qqbind.QQBindConfig;
 import com.poso.qqbind.core.BindingManager;
+import com.poso.qqbind.core.PlayerActivityManager;
 import com.poso.qqbind.core.PlayerStateManager;
 import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
@@ -18,6 +19,11 @@ public class FabricEventHandler {
      * 玩家登录时调用
      */
     public static void onPlayerLogin(ServerPlayer player) {
+        try {
+            PlayerActivityManager.onPlayerLogin(player.getUUID(), player.getScoreboardName());
+        } catch (Exception e) {
+            LOGGER.warn("记录玩家登录活动失败: {}", e.getMessage());
+        }
         if (!QQBindConfig.ENABLE_WHITELIST_CHECK) return;
 
         String gameId = player.getScoreboardName();
@@ -42,6 +48,11 @@ public class FabricEventHandler {
      * 玩家登出时清理资源
      */
     public static void onPlayerLogout(ServerPlayer player) {
+        try {
+            PlayerActivityManager.onPlayerLogout(player.getUUID(), player.getScoreboardName());
+        } catch (Exception e) {
+            LOGGER.warn("记录玩家退出活动失败: {}", e.getMessage());
+        }
         PlayerStateManager.removePlayer(player);
     }
 }

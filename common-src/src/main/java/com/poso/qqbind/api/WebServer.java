@@ -8,10 +8,7 @@ import com.poso.qqbind.api.exception.InvalidParameterException;
 import com.poso.qqbind.api.exception.ResourceNotFoundException;
 import com.poso.qqbind.api.handler.BaseHandler;
 import com.poso.qqbind.api.response.ErrorCode;
-import com.poso.qqbind.core.BindingManager;
-import com.poso.qqbind.core.CacheManager;
-import com.poso.qqbind.core.PlayerStateManager;
-import com.poso.qqbind.core.TokenManager;
+import com.poso.qqbind.core.*;
 import com.poso.qqbind.server.ServerProviderHolder;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -283,6 +280,15 @@ public class WebServer {
                 playersArray.add(p);
             }
             serverInfo.add("players", playersArray);
+
+            PlayerActivityManager.LastActivityInfo lastActivity = PlayerActivityManager.getLastActivity();
+            if (lastActivity != null) {
+                serverInfo.addProperty("last_activity_time", lastActivity.timestamp);
+                serverInfo.addProperty("last_activity_player", lastActivity.playerName);
+            } else {
+                serverInfo.addProperty("last_activity_time", 0);
+                serverInfo.addProperty("last_activity_player", "");
+            }
 
             sendSuccess(exchange, serverInfo);
         }

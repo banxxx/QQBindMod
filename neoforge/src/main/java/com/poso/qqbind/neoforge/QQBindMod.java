@@ -4,10 +4,13 @@ import com.mojang.logging.LogUtils;
 import com.poso.qqbind.QQBindConfig;
 import com.poso.qqbind.api.WebServer;
 import com.poso.qqbind.core.BindingManager;
+import com.poso.qqbind.core.PlayerActivityManager;
 import com.poso.qqbind.server.ServerProviderHolder;
 import com.poso.qqbind.storage.DataStorage;
 import com.poso.qqbind.storage.JsonStorage;
 import com.poso.qqbind.storage.RemoteStorage;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.Mod;
@@ -15,6 +18,10 @@ import net.neoforged.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import org.slf4j.Logger;
+
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * 模组主类，Forge 模组入口.
@@ -50,6 +57,12 @@ public class QQBindMod {
             ServerProviderHolder.setProvider(new NeoForgeServerProvider());
             QQBindConfig.load();
 
+            try {
+                PlayerActivityManager.init();
+            } catch (Exception e) {
+                LOGGER.error("初始化 PlayerActivityManager 失败", e);
+            }
+
             DataStorage storage;
             if ("local".equalsIgnoreCase(QQBindConfig.STORAGE_MODE)) {
                 storage = new JsonStorage();
@@ -69,6 +82,23 @@ public class QQBindMod {
 
     @SubscribeEvent
     public void onServerStopped(ServerStoppedEvent event) {
+        // 先标记所有在线玩家为已退出
+        try {
+            MinecraftServer server = event.getServer();
+            Set<UUID> onlineUuids = server.getPlayerList().getPlayers()
+                    .stream().map(ServerPlayer::getUUID).collect(Collectors.toSet());
+            PlayerActivityManager.markAllOnlinePlayersAsQuit(onlineUuids);
+        } catch (Exception e) {
+            LOGGER.warn("标记在线玩家退出时异常: {}", e.getMessage());
+        }
+
+        // 关闭管理器（最后一次同步写盘）
+        try {
+            PlayerActivityManager.shutdown();
+        } catch (Exception e) {
+            LOGGER.error("关闭 PlayerActivityManager 失败", e);
+        }
+
         if (bindingManager != null) {
             bindingManager.close();
         }

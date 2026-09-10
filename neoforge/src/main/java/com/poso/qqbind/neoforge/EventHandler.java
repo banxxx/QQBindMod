@@ -3,6 +3,7 @@ package com.poso.qqbind.neoforge;
 import com.mojang.logging.LogUtils;
 import com.poso.qqbind.QQBindConfig;
 import com.poso.qqbind.core.BindingManager;
+import com.poso.qqbind.core.PlayerActivityManager;
 import com.poso.qqbind.core.PlayerStateManager;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -25,6 +26,11 @@ public class EventHandler {
     @SubscribeEvent
     public void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        try {
+            PlayerActivityManager.onPlayerLogin(player.getUUID(), player.getScoreboardName());
+        } catch (Exception e) {
+            LOGGER.warn("记录玩家登录活动失败: {}", e.getMessage());
+        }
         if (!QQBindConfig.ENABLE_WHITELIST_CHECK) return;
 
         String gameId = player.getScoreboardName();
@@ -49,6 +55,11 @@ public class EventHandler {
     @SubscribeEvent
     public void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
+            try {
+                PlayerActivityManager.onPlayerLogout(player.getUUID(), player.getScoreboardName());
+            } catch (Exception e) {
+                LOGGER.warn("记录玩家退出活动失败: {}", e.getMessage());
+            }
             PlayerStateManager.removePlayer(player);
         }
     }

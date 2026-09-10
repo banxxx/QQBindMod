@@ -31,7 +31,13 @@ public class FabricModInitializer implements ModInitializer {
         // 2. 加载配置（若不存在则创建默认配置）
         QQBindConfig.load();
 
-        // 3. 初始化存储和绑定管理器
+        // 3. 初始化玩家活动管理器
+        try {
+            com.poso.qqbind.core.PlayerActivityManager.init();
+        } catch (Exception e) {
+            LOGGER.error("初始化 PlayerActivityManager 失败", e);
+        }
+        // 4. 初始化存储和绑定管理器
         // 根据配置选择存储实现
         DataStorage storage;
         String mode = QQBindConfig.STORAGE_MODE;
@@ -45,32 +51,49 @@ public class FabricModInitializer implements ModInitializer {
 
         bindingManager = new BindingManager(storage);
 
-        // 4. 启动 HTTP API 服务
+        // 5. 启动 HTTP API 服务
         webServer = new WebServer(bindingManager);
         webServer.start();
         LOGGER.info("HTTP server started on port {}", QQBindConfig.HTTP_PORT);
 
-        // 5. 注册事件监听（玩家登录/登出）
+        // 6. 注册事件监听（玩家登录/登出）
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
                 FabricEventHandler.onPlayerLogin(handler.getPlayer()));
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
                 FabricEventHandler.onPlayerLogout(handler.getPlayer()));
 
-        // 6. 注册命令
+        // 7. 注册命令
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 FabricServerCommands.register(dispatcher));
 
-        // 7. 注册操作限制（所有拦截回调）
+        // 8. 注册操作限制（所有拦截回调）
         FabricRestrictionHandler.register();
 
-        // 8. 监听服务器启动事件，将服务器实例缓存到 FabricServerProvider
+        // 9. 监听服务器启动事件，将服务器实例缓存到 FabricServerProvider
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             FabricServerProvider.setServer(server);
             LOGGER.info("Fabric server instance cached.");
         });
 
-        // 9. 注册服务器停止时关闭 HTTP 服务，并清理缓存的服务器实例
+        // 10. 注册服务器停止时关闭 HTTP 服务，并清理缓存的服务器实例
         ServerLifecycleEvents.SERVER_STOPPING.register((server) -> {
+            // 先标记所有在线玩家为已退出
+            try {
+                java.util.Set<java.util.UUID> onlineUuids = server.getPlayerList().getPlayers()
+                        .stream().map(net.minecraft.server.level.ServerPlayer::getUUID)
+                        .collect(java.util.stream.Collectors.toSet());
+                com.poso.qqbind.core.PlayerActivityManager.markAllOnlinePlayersAsQuit(onlineUuids);
+            } catch (Exception e) {
+                LOGGER.warn("标记在线玩家退出时异常: {}", e.getMessage());
+            }
+
+            // 关闭活动管理器（最后一次同步写盘）
+            try {
+                com.poso.qqbind.core.PlayerActivityManager.shutdown();
+            } catch (Exception e) {
+                LOGGER.error("关闭 PlayerActivityManager 失败", e);
+            }
+
             if (bindingManager != null) {
                 bindingManager.close();
             }
