@@ -310,12 +310,19 @@ public class WebServer {
                 throw new BusinessException(ErrorCode.SERVER_NOT_AVAILABLE);
             }
 
+            Map<String, Object> statsMap;
             ServerPlayer player = server.getPlayerList().getPlayerByName(playerName);
-            if (player == null) {
-                throw new ResourceNotFoundException(ErrorCode.PLAYER_NOT_FOUND);
+            if (player != null) {
+                // 玩家在线：从内存读取
+                statsMap = com.poso.qqbind.utils.StatUtils.getPlayerStats(player);
+            } else {
+                // 玩家离线：从磁盘读取
+                statsMap = com.poso.qqbind.utils.OfflineStatsReader.getPlayerStatsFromDisk(server, playerName);
+                if (statsMap == null) {
+                    throw new ResourceNotFoundException(ErrorCode.PLAYER_NOT_FOUND);
+                }
             }
 
-            Map<String, Object> statsMap = com.poso.qqbind.utils.StatUtils.getPlayerStats(player);
             JsonObject response = new JsonObject();
             for (Map.Entry<String, Object> entry : statsMap.entrySet()) {
                 Object val = entry.getValue();

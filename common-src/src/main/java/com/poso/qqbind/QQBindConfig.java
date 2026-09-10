@@ -25,7 +25,7 @@ import java.util.UUID;
  */
 public class QQBindConfig {
     private static final Logger LOGGER = LoggerFactory.getLogger(QQBindConfig.class);
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
     private static final String CONFIG_FILE = "config/qqbind/qqbind-config.json";
 
     // 配置字段（静态，全局可访问）
