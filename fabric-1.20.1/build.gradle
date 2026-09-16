@@ -45,6 +45,7 @@ dependencies {
 }
 
 shadowJar {
+    archiveClassifier = 'shadow-raw'
     configurations = [project.configurations.shadow]
     from sourceSets.main.output
     relocate 'com.mysql', 'com.poso.qqbind.libs.mysql'

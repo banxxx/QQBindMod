@@ -37,7 +37,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.module }}-jar
-          path: ${{ matrix.module }}/build/libs/*.jar
+          path: |
+            ${{ matrix.module }}/build/libs/*.jar
+            !${{ matrix.module }}/build/libs/*-shadow-raw.jar
 
   release:
     needs: build
