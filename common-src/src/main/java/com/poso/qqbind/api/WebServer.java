@@ -7,6 +7,7 @@ import com.poso.qqbind.api.exception.BusinessException;
 import com.poso.qqbind.api.exception.InvalidParameterException;
 import com.poso.qqbind.api.exception.ResourceNotFoundException;
 import com.poso.qqbind.api.handler.BaseHandler;
+import com.poso.qqbind.api.holder.PlatformInfoHolder;
 import com.poso.qqbind.api.response.ErrorCode;
 import com.poso.qqbind.core.*;
 import com.poso.qqbind.server.ServerProviderHolder;
@@ -252,7 +253,7 @@ public class WebServer {
             serverInfo.addProperty("name", "本服");
             serverInfo.addProperty("online_players", server.getPlayerCount());
             serverInfo.addProperty("max_players", server.getMaxPlayers());
-            serverInfo.addProperty("version", server.getServerVersion());
+            serverInfo.addProperty("version", PlatformInfoHolder.getDisplay());
             serverInfo.addProperty("motd", server.getMotd());
 
             double tps = getTPS(server);

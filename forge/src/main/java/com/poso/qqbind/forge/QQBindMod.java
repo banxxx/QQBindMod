@@ -3,6 +3,7 @@ package com.poso.qqbind.forge;
 import com.mojang.logging.LogUtils;
 import com.poso.qqbind.QQBindConfig;
 import com.poso.qqbind.api.WebServer;
+import com.poso.qqbind.api.holder.PlatformInfoHolder;
 import com.poso.qqbind.core.BindingManager;
 import com.poso.qqbind.core.PlayerActivityManager;
 import com.poso.qqbind.server.ServerProviderHolder;
@@ -43,6 +44,7 @@ public class QQBindMod {
     private static BindingManager bindingManager;
 
     public QQBindMod() {
+        PlatformInfoHolder.setDisplay("Forge 1.20.1");
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
 
         // 注册通用设置事件

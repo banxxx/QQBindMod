@@ -3,6 +3,7 @@ package com.poso.qqbind.neoforge;
 import com.mojang.logging.LogUtils;
 import com.poso.qqbind.QQBindConfig;
 import com.poso.qqbind.api.WebServer;
+import com.poso.qqbind.api.holder.PlatformInfoHolder;
 import com.poso.qqbind.core.BindingManager;
 import com.poso.qqbind.core.PlayerActivityManager;
 import com.poso.qqbind.server.ServerProviderHolder;
@@ -42,6 +43,7 @@ public class QQBindMod {
     private static BindingManager bindingManager;
 
     public QQBindMod(IEventBus modEventBus) {
+        PlatformInfoHolder.setDisplay("NeoForge 1.21.1");
         modEventBus.addListener(this::commonSetup);
 
         NeoForge.EVENT_BUS.register(this);

@@ -2,6 +2,7 @@ package com.poso.qqbind.fabric;
 
 import com.poso.qqbind.QQBindConfig;
 import com.poso.qqbind.api.WebServer;
+import com.poso.qqbind.api.holder.PlatformInfoHolder;
 import com.poso.qqbind.core.BindingManager;
 import com.poso.qqbind.server.ServerProviderHolder;
 import com.poso.qqbind.storage.DataStorage;
@@ -25,6 +26,7 @@ public class FabricModInitializer implements ModInitializer {
 
     @Override
     public void onInitialize() {
+        PlatformInfoHolder.setDisplay("Fabric 1.21.1");
         // 1. 设置服务器提供者（Fabric 实现）
         ServerProviderHolder.setProvider(new FabricServerProvider());
 
