@@ -164,4 +164,46 @@ public class JsonStorage implements DataStorage {
             LOGGER.error("Failed to save binding data", e);
         }
     }
+
+    /**
+     * 用给定数据全量替换当前存储内容（用于从数据库同步）
+     */
+    public void replaceAll(Map<String, String> data) {
+        lock.writeLock().lock();
+        try {
+            gameIdToQQ = new HashMap<>(data);
+            qqToGameId = new HashMap<>();
+            for (Map.Entry<String, String> entry : data.entrySet()) {
+                qqToGameId.put(entry.getValue(), entry.getKey());
+            }
+            saveToFile();
+            LOGGER.info("JsonStorage 已替换为 {} 条记录", gameIdToQQ.size());
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    /**
+     * 用给定数据与当前数据合并（数据库优先，本地独有的记录保留）
+     * 用于定时同步：数据库有的用数据库值，数据库没有的保留本地
+     */
+    public void mergeAll(Map<String, String> data) {
+        lock.writeLock().lock();
+        try {
+            // 以本地为基础，数据库覆盖
+            Map<String, String> merged = new HashMap<>(gameIdToQQ);
+            merged.putAll(data);
+
+            gameIdToQQ = merged;
+            qqToGameId = new HashMap<>();
+            for (Map.Entry<String, String> entry : gameIdToQQ.entrySet()) {
+                qqToGameId.put(entry.getValue(), entry.getKey());
+            }
+            saveToFile();
+            LOGGER.info("JsonStorage 合并后共 {} 条记录（本次数据库贡献 {} 条，保留本地独有 {} 条）",
+                    gameIdToQQ.size(), data.size(), gameIdToQQ.size() - data.size());
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
 }

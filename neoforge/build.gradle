@@ -77,6 +77,18 @@ dependencies {
     implementation 'mysql:mysql-connector-java:8.0.33'
     // HikariCP 连接池
     implementation 'com.zaxxer:HikariCP:5.0.1'
+    jarJar('com.mysql:mysql-connector-j:8.0.33') {
+        version {
+            strictly '[8.0.33,)'
+            prefer '8.0.33'
+        }
+    }
+    jarJar('com.zaxxer:HikariCP:5.0.1') {
+        version {
+            strictly '[5.0.1,)'
+            prefer '5.0.1'
+        }
+    }
 }
 
 publishing {
