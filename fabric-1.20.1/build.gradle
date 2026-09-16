@@ -1,6 +1,7 @@
 plugins {
     id 'fabric-loom' version '1.11-SNAPSHOT'
     id 'java-library'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
 }
 
 version = "${mod_version}-fabric-${fabric_minecraft_version_120}"
@@ -37,8 +38,30 @@ dependencies {
     modImplementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version_120}"
     implementation 'com.mysql:mysql-connector-j:8.0.33'
     implementation 'com.zaxxer:HikariCP:5.0.1'
-    include 'com.mysql:mysql-connector-j:8.0.33'
-    include 'com.zaxxer:HikariCP:5.0.1'
+//    include 'com.mysql:mysql-connector-j:8.0.33'
+//    include 'com.zaxxer:HikariCP:5.0.1'
+    shadow 'com.mysql:mysql-connector-j:8.0.33'
+    shadow 'com.zaxxer:HikariCP:5.0.1'
+}
+
+shadowJar {
+    configurations = [project.configurations.shadow]
+    from sourceSets.main.output
+    relocate 'com.mysql', 'com.poso.qqbind.libs.mysql'
+    relocate 'com.zaxxer', 'com.poso.qqbind.libs.hikari'
+
+    exclude 'META-INF/*.SF'
+    exclude 'META-INF/*.DSA'
+    exclude 'META-INF/*.RSA'
+}
+
+remapJar {
+    // 确保 remapJar 在 shadowJar 之后运行
+    dependsOn shadowJar
+    mustRunAfter shadowJar
+
+    // 将 remapJar 的输入设置为 shadowJar 的输出文件
+    inputFile = shadowJar.archiveFile
 }
 
 java {
