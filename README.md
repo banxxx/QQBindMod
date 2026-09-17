@@ -10,14 +10,14 @@
 
 **QQBindMod** 是一个服务端模组，它内置了一个轻量级 HTTP 服务器，为机器人程序（如基于 AstrBot 的 QQ 机器人）提供 RESTful API，用于绑定/解绑 QQ 号与游戏内玩家 ID，并自动同步原版白名单。
 
-**新增核心特性**：支持 **“中心数据库模式”**，通过 Cloudflare D1 或兼容的 HTTP API 数据库实现跨服数据共享，真正实现 **“一次绑定，全服通用”**。同时保留了原有的 **“本地模式”** 以实现向后兼容。
+**数据库**：支持 **“中心数据库模式”**，通过 TIDB数据库 或兼容的 HTTP API 数据库实现跨服数据共享，真正实现 **“一次绑定，全服通用”**。同时保留了原有的 **“本地模式”** 以实现向后兼容。
 
 ## ✨ 功能特性
 
 - 🔐 **QQ 绑定**：通过 `/api/bind` 绑定 QQ 号和游戏 ID，支持反向查询
 - 🚫 **未绑定拦截**：未绑定的玩家无法进入服务器（可配置）
 - ⚙️ **白名单同步**：绑定成功自动添加原版白名单，解绑自动移除
-- 🌐 **跨服数据共享**（新模式）：绑定数据存储于云端数据库，所有服务器共享同一份数据
+- 🌐 **跨服数据共享**：绑定数据存储于云端数据库，所有服务器共享同一份数据
 - 📊 **玩家统计**：提供 `/api/stats` 获取玩家详细数据（移动距离、击杀、死亡等）
 - 🖥️ **在线列表**：`/api/status` 返回当前在线玩家信息（含 UUID）
 - 📈 **TPS 查询**：`/api/tps` 返回服务器当前 TPS
@@ -94,7 +94,7 @@ JAR 位于对应子项目的 `fabric/build/libs/qqbind-*-fabric-1.2*.1.jar` 下�
 2. 启动服务器，模组会在 `config/qqbind/` 下生成默认配置文件 `qqbind-config.json`
 3. 修改配置文件中的 `apiToken`（**必须修改！**）和 `httpPort`（默认 25566）
 4. 根据需要设置存储模式（详见下方配置说明）
-5. `httpPor`与`storageMode`参数修改后需要重启服务器生效
+5. `httpPort`与`storageMode`参数修改后需要重启服务器生效
 
 ### 配置示例
 
@@ -127,7 +127,7 @@ JAR 位于对应子项目的 `fabric/build/libs/qqbind-*-fabric-1.2*.1.jar` 下�
 | remote | 仅使用远程数据库（通过 dbApiUrl 指向的 HTTP API，如 Cloudflare D1），不保留本地 JSON 备份。 | 完全依赖云数据库，追求数据强一致性。 |
 | hybrid | 推荐模式。优先从远程数据库读写，同时保留本地 JSON 作为缓存和降级备份。查询时先查内存缓存（TTL 可配置），未命中则请求远程数据库并更新缓存。写入时同时更新远程和本地。 | 追求高可用性，容忍短暂网络故障，实现跨服数据共享。 |
 
-### 新增配置项释义
+### 配置项释义
 
 | 字段 | 类型 | 必填 | 说明 |
 | :--- | :--- | :--- | :--- |
@@ -191,15 +191,6 @@ JAR 位于对应子项目的 `fabric/build/libs/qqbind-*-fabric-1.2*.1.jar` 下�
 
 ---
 
-## 发布的 Artifacts
-
-GitHub Release 会自动附上以下 JAR 文件：
-
-- qqbind-<version>-forge-1.20.1.jar
-- qqbind-<version>-neoforge-1.21.1.jar
-- qqbind-<version>-fabric-1.20.1.jar
-- qqbind-<version>-fabric-1.21.1.jar
-
 ## 🛠️ 开发指南
 
 ### 代码结构
@@ -232,5 +223,5 @@ GitHub Release 会自动附上以下 JAR 文件：
 ## 🙏 致谢
 
 - Minecraft Forge & NeoForge & Fabric 社区
-- [AstrBot](https://github.com/Soulter/AstrBot) 提供机器人框架支持
+- [AstrBot](https://github.com/AstrBotDevs/AstrBot) 提供机器人框架支持
 - 所有使用和反馈的玩家

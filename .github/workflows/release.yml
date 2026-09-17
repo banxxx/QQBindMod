@@ -34,12 +34,31 @@ jobs:
           cache-read-only: false
       - name: Build ${{ matrix.module }}
         run: gradle build --no-daemon
-      - uses: actions/upload-artifact@v4
+
+      - name: Upload fabric artifacts
+        if: startsWith(matrix.module, 'fabric')
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.module }}-jar
           path: |
             ${{ matrix.module }}/build/libs/*.jar
             !${{ matrix.module }}/build/libs/*-shadow-raw.jar
+
+      - name: Upload forge artifacts
+        if: matrix.module == 'forge'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.module }}-jar
+          path: ${{ matrix.module }}/build/libs/*-all.jar
+          if-no-files-found: error
+
+      - name: Upload neoforge artifacts
+        if: matrix.module == 'neoforge'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.module }}-jar
+          path: |
+            ${{ matrix.module }}/build/libs/*.jar
 
   release:
     needs: build
