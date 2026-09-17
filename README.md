@@ -65,7 +65,7 @@ QQBindMod/
 ### 构建
 
 ```bash
-git clone https://github.com/yourusername/QQBindMod.git
+git clone https://github.com/banxxx/QQBindMod.git
 cd QQBindMod
 ```
 
@@ -94,7 +94,7 @@ JAR 位于对应子项目的 `fabric/build/libs/qqbind-*-fabric-1.2*.1.jar` 下�
 2. 启动服务器，模组会在 `config/qqbind/` 下生成默认配置文件 `qqbind-config.json`
 3. 修改配置文件中的 `apiToken`（**必须修改！**）和 `httpPort`（默认 25566）
 4. 根据需要设置存储模式（详见下方配置说明）
-5. 重启服务器生效
+5. `httpPor`与`storageMode`参数修改后需要重启服务器生效
 
 ### 配置示例
 
@@ -163,7 +163,7 @@ JAR 位于对应子项目的 `fabric/build/libs/qqbind-*-fabric-1.2*.1.jar` 下�
 
 ## 机器人集成
 
-模组提供了完整的 HTTP API，推荐使用 AstrBot 的插件 astrbot_plugin_mcsight 实现 QQ 绑定功能。
+模组提供了完整的 HTTP API，推荐使用 AstrBot 的插件 [astrbot_plugin_mcsight](https://github.com/banxxx/astrbot_plugin_mcsight) 实现 QQ 绑定功能。
 
 ### 插件配置（新增中心数据库支持）
 
