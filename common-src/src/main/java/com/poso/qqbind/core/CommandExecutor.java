@@ -29,32 +29,37 @@ public class CommandExecutor {
     }
 
     private static void executeCommand(String command) {
-        try {
-            MinecraftServer server = ServerProviderHolder.get().getCurrentServer();
-            if (server == null) {
-                LOGGER.warn("Server not available, cannot execute command: {}", command);
-                return;
+        // 命令必须排在服务端主线程执行（HTTP/健康检查线程直接跑 dispatcher 会崩溃或死锁）
+        MainThread.post(() -> {
+            try {
+                MinecraftServer server = ServerProviderHolder.get().getCurrentServer();
+                if (server == null) {
+                    LOGGER.warn("Server not available, cannot execute command: {}", command);
+                    return;
+                }
+
+                CommandDispatcher<CommandSourceStack> dispatcher = server.getCommands().getDispatcher();
+                CommandSourceStack source = server.createCommandSourceStack();
+
+                ParseResults<CommandSourceStack> parseResults = dispatcher.parse(command, source);
+                dispatcher.execute(parseResults);
+
+                LOGGER.info("Executed command: {}", command);
+            } catch (Exception e) {
+                LOGGER.error("Failed to execute command: {}", command, e);
             }
-
-            CommandDispatcher<CommandSourceStack> dispatcher = server.getCommands().getDispatcher();
-            CommandSourceStack source = server.createCommandSourceStack();
-
-            ParseResults<CommandSourceStack> parseResults = dispatcher.parse(command, source);
-            dispatcher.execute(parseResults);
-
-            LOGGER.info("Executed command: {}", command);
-        } catch (Exception e) {
-            LOGGER.error("Failed to execute command: {}", command, e);
-        }
+        });
     }
 
     /**
      * 断开玩家连接并显示提示（使用 Component）
      */
     public static void disconnectPlayer(ServerPlayer player, String message) {
-        // 使用 Component.literal() 创建文本，并支持颜色代码
-        Component kickMessage = Component.literal(message);
-        player.connection.disconnect(kickMessage);
-        LOGGER.info("Disconnected player {}: {}", player.getScoreboardName(), message);
+        MainThread.post(() -> {
+            // 使用 Component.literal() 创建文本，并支持颜色代码
+            Component kickMessage = Component.literal(message);
+            player.connection.disconnect(kickMessage);
+            LOGGER.info("Disconnected player {}: {}", player.getScoreboardName(), message);
+        });
     }
 }

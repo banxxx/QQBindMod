@@ -11,6 +11,8 @@ import com.poso.qqbind.api.holder.PlatformInfoHolder;
 import com.poso.qqbind.api.response.ErrorCode;
 import com.poso.qqbind.core.*;
 import com.poso.qqbind.server.ServerProviderHolder;
+import com.poso.qqbind.storage.DataStorage;
+import com.poso.qqbind.storage.RemoteStorage;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import net.minecraft.network.chat.Component;
@@ -66,9 +68,18 @@ public class WebServer {
     }
 
     public void start() {
+        if (QQBindConfig.isApiTokenUnsafe()) {
+            LOGGER.error("检测到 apiToken 仍为默认占位值，已拒绝启动 HTTP API（否则任何人可调用绑定/解绑/白名单接口）。"
+                    + "请在 config/qqbind/qqbind-config.json 中将 apiToken 设置为随机长字符串，并与 QQ 机器人插件保持一致后重启服务器。");
+            return;
+        }
         try {
             int port = QQBindConfig.HTTP_PORT;
-            server = HttpServer.create(new InetSocketAddress(port), 0);
+            String bindHost = QQBindConfig.HTTP_BIND_HOST;
+            server = HttpServer.create(new InetSocketAddress(bindHost, port), 0);
+            if (!"127.0.0.1".equals(bindHost) && !"localhost".equals(bindHost)) {
+                LOGGER.warn("HTTP API 正在监听 {}:{}，可被其他网段访问。若机器人部署在本机，建议将 httpBindHost 设为 127.0.0.1；跨服部署时请使用内网地址并配合防火墙限制来源。", bindHost, port);
+            }
 
             // 注册路由
             server.createContext("/api/bind", new BindHandler());
@@ -80,12 +91,13 @@ public class WebServer {
             server.createContext("/api/broadcast", new BroadcastHandler());
             server.createContext("/api/validate_token", new ValidateTokenHandler());
             server.createContext("/api/cache/invalidate", new CacheInvalidateHandler());
+            server.createContext("/api/sync_binding", new SyncBindingHandler());
 
             server.setExecutor(Executors.newCachedThreadPool());
             server.start();
-            LOGGER.info("HTTP Server started on port {}", port);
+            LOGGER.info("HTTP Server started on {}:{}", bindHost, port);
         } catch (IOException e) {
-            LOGGER.error("Failed to start HTTP server", e);
+            LOGGER.error("Failed to start HTTP server (check httpBindHost/httpPort config)", e);
         }
     }
 
@@ -138,10 +150,16 @@ public class WebServer {
 
             // 模式2：令牌模式（提供 token）
             if (token != null && !token.isEmpty()) {
+                String ip = clientIp(exchange);
+                if (TokenRateLimiter.isBlocked(ip) || TokenRateLimiter.isTokenBlocked(token)) {
+                    throw new BusinessException(ErrorCode.RATE_LIMITED);
+                }
                 String gameIdFromToken = TokenManager.validateAndUseToken(token, qq);
                 if (gameIdFromToken == null) {
+                    TokenRateLimiter.recordFailure(ip, token);
                     throw new InvalidParameterException(ErrorCode.INVALID_TOKEN);
                 }
+                TokenRateLimiter.recordSuccess(ip);
                 BindingManager.BindResult result = bindingManager.bind(qq, gameIdFromToken);
                 if (result.success) {
                     JsonObject data = new JsonObject();
@@ -255,6 +273,15 @@ public class WebServer {
             serverInfo.addProperty("max_players", server.getMaxPlayers());
             serverInfo.addProperty("version", PlatformInfoHolder.getDisplay());
             serverInfo.addProperty("motd", server.getMotd());
+
+            // 存储与数据库连接状态（供机器人端展示降级提示）
+            serverInfo.addProperty("storage_mode", QQBindConfig.STORAGE_MODE);
+            DataStorage storage = bindingManager.getStorage();
+            if (storage instanceof RemoteStorage) {
+                serverInfo.addProperty("db_available", ((RemoteStorage) storage).isDbAvailable());
+            } else {
+                serverInfo.addProperty("db_available", false);
+            }
 
             double tps = getTPS(server);
             serverInfo.addProperty("tps", tps);
@@ -393,21 +420,23 @@ public class WebServer {
             // 构建屏幕中央显示的消息
             Component titleComponent = Component.literal(message);
 
-            // 获取所有在线玩家
-            Collection<ServerPlayer> players = server.getPlayerList().getPlayers();
-            for (ServerPlayer player : players) {
-                // 发送大标题
-                player.connection.send(new ClientboundSetTitleTextPacket(titleComponent));
-                // 设置动画：淡入10 tick，停留100 tick（5秒），淡出10 tick
-                player.connection.send(new ClientboundSetTitlesAnimationPacket(10, 200, 10));
-            }
+            // 主线程快照在线人数，实际发包排队到主线程执行
+            int playerCount = server.getPlayerList().getPlayers().size();
+            MainThread.post(() -> {
+                for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                    // 发送大标题
+                    player.connection.send(new ClientboundSetTitleTextPacket(titleComponent));
+                    // 设置动画：淡入10 tick，停留200 tick，淡出10 tick
+                    player.connection.send(new ClientboundSetTitlesAnimationPacket(10, 200, 10));
+                }
+            });
 
-            LOGGER.info("Broadcast title sent to {} players: {}", players.size(), message);
+            LOGGER.info("Broadcast title queued for {} players: {}", playerCount, message);
 
             // 返回成功响应
             JsonObject data = new JsonObject();
             data.addProperty("message", "广播已发送");
-            data.addProperty("player_count", players.size());
+            data.addProperty("player_count", playerCount);
             sendSuccess(exchange, data);
         }
     }
@@ -430,9 +459,15 @@ public class WebServer {
             }
 
             TokenManager.TokenInfo info = TokenManager.validateTokenOnly(token);
+            String ip = clientIp(exchange);
+            if (TokenRateLimiter.isBlocked(ip) || TokenRateLimiter.isTokenBlocked(token)) {
+                throw new BusinessException(ErrorCode.RATE_LIMITED);
+            }
             if (info == null) {
+                TokenRateLimiter.recordFailure(ip, token);
                 throw new InvalidParameterException(ErrorCode.INVALID_TOKEN);
             }
+            TokenRateLimiter.recordSuccess(ip);
 
             JsonObject data = new JsonObject();
             data.addProperty("valid", true);
@@ -497,6 +532,43 @@ public class WebServer {
             }
 
             sendSuccess(exchange);
+        }
+    }
+
+    /**
+     * 下行同步处理器 - POST /api/sync_binding
+     * 插件直写中心库成功后，将权威绑定结果推送到本服（仅写本地镜像，不写 DB）。
+     * 请求体: {"gameId": "player", "qq": "123456789"}；qq 为空/缺失表示同步解绑删除。
+     */
+    private class SyncBindingHandler extends BaseHandler {
+        @Override
+        protected void doHandle(HttpExchange exchange) throws Exception {
+            if (!validateMethod(exchange, "POST")) return;
+            if (!validateAuth(exchange)) return;
+
+            String body = readRequestBody(exchange);
+            JsonObject json = gson.fromJson(body, JsonObject.class);
+            String gameId = json.has("gameId") ? json.get("gameId").getAsString() : null;
+            String qq = json.has("qq") ? json.get("qq").getAsString() : null;
+
+            if (gameId == null || gameId.isEmpty()) {
+                throw new InvalidParameterException(ErrorCode.MISSING_GAME_ID_OR_TOKEN);
+            }
+
+            JsonObject data = new JsonObject();
+            data.addProperty("gameId", gameId);
+            if (qq == null || qq.isEmpty()) {
+                bindingManager.applySyncedUnbind(gameId);
+                data.addProperty("action", "unbind");
+            } else {
+                bindingManager.applySyncedBinding(qq, gameId);
+                data.addProperty("action", "bind");
+            }
+            if (bindingManager.getStorage() instanceof RemoteStorage) {
+                data.addProperty("db_available",
+                        ((RemoteStorage) bindingManager.getStorage()).isDbAvailable());
+            }
+            sendSuccess(exchange, data);
         }
     }
 

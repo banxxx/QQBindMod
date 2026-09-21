@@ -26,11 +26,15 @@ public class PlayerStateManager {
     private static final Map<UUID, Boolean> restrictedPlayers = new ConcurrentHashMap<>();
 
     /**
-     * 设置玩家的受限状态。
+     * 设置玩家的受限状态。游戏模式切换排队到服务端主线程执行。
      * @param player   目标玩家
      * @param restricted true 表示限制，false 表示解除限制
      */
     public static void setRestricted(ServerPlayer player, boolean restricted) {
+        MainThread.post(() -> applyRestricted(player, restricted));
+    }
+
+    private static void applyRestricted(ServerPlayer player, boolean restricted) {
         UUID uuid = player.getUUID();
         if (restricted) {
             restrictedPlayers.put(uuid, true);
@@ -65,9 +69,14 @@ public class PlayerStateManager {
     /**
      * 向受限玩家发送完整提示消息（Title + Subtitle + ActionBar + Chat），
      * 包含令牌信息。此方法自动获取或刷新令牌。
+     * 排队到主线程执行，保证与 setRestricted 的先后顺序。
      * @param player 目标玩家
      */
     public static void sendRestrictionMessage(ServerPlayer player) {
+        MainThread.post(() -> doSendRestrictionMessage(player));
+    }
+
+    private static void doSendRestrictionMessage(ServerPlayer player) {
         // 获取或刷新令牌
         String token = TokenManager.getOrRefreshToken(player);
 
@@ -90,6 +99,10 @@ public class PlayerStateManager {
      * 发送简短的 ActionBar 提醒（用于操作拦截时快速反馈）
      */
     public static void sendActionBarReminder(ServerPlayer player) {
+        MainThread.post(() -> doSendActionBarReminder(player));
+    }
+
+    private static void doSendActionBarReminder(ServerPlayer player) {
         String token = TokenManager.getOrRefreshToken(player);
         String actionBar = QQBindConfig.formatMessage(QQBindConfig.ACTION_BAR_TEMPLATE, token);
         player.connection.send(new ClientboundSetActionBarTextPacket(Component.literal(actionBar)));

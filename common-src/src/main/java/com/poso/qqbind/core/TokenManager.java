@@ -5,9 +5,13 @@ import net.minecraft.server.level.ServerPlayer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.security.SecureRandom;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 令牌管理类，负责生成、存储、验证和刷新一次性绑定令牌。
@@ -18,11 +22,29 @@ public class TokenManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(TokenManager.class);
     private static final long TOKEN_VALIDITY_MS = 5 * 60 * 1000; // 5 分钟
     private static final int TOKEN_LENGTH = 6; // 6 位数字
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
     // 存储所有有效令牌（token -> TokenInfo）
     private static final Map<String, TokenInfo> tokenMap = new ConcurrentHashMap<>();
     // 快速查找玩家当前令牌（playerUUID -> token）
     private static final Map<UUID, String> playerTokenCache = new ConcurrentHashMap<>();
+
+    static {
+        // 后台定时清理过期令牌与限流窗口，避免 map 无限增长
+        ScheduledExecutorService cleaner = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "QQBind-TokenCleanup");
+            t.setDaemon(true);
+            return t;
+        });
+        cleaner.scheduleAtFixedRate(() -> {
+            try {
+                cleanupExpiredTokens();
+                TokenRateLimiter.cleanup();
+            } catch (Exception e) {
+                LOGGER.warn("Token cleanup failed: {}", e.getMessage());
+            }
+        }, 30, 30, TimeUnit.SECONDS);
+    }
 
     /**
      * 令牌信息内部类
@@ -97,17 +119,15 @@ public class TokenManager {
         TokenInfo info = new TokenInfo(token, player.getScoreboardName(), QQBindConfig.SERVER_ID);
         tokenMap.put(token, info);
         playerTokenCache.put(player.getUUID(), token);
-        LOGGER.info("Generated new token {} for player {}", token, player.getScoreboardName());
+        LOGGER.info("Generated new token for player {}", player.getScoreboardName());
         return token;
     }
 
     /**
-     * 生成 6 位随机数字令牌
+     * 生成 6 位随机数字令牌（SecureRandom，避免 hashCode 取值分布不均与 MIN_VALUE 溢出）
      */
     private static String generateRandomToken() {
-        // 使用 UUID 生成随机数字，取绝对值后取模 10^6
-        int rand = Math.abs(UUID.randomUUID().hashCode()) % 1_000_000;
-        return String.format("%06d", rand);
+        return String.format("%06d", SECURE_RANDOM.nextInt(1_000_000));
     }
 
     /**
@@ -120,7 +140,7 @@ public class TokenManager {
             TokenInfo info = tokenMap.remove(oldToken);
             if (info != null) {
                 info.markUsed();
-                LOGGER.info("Invalidated old token {} for player {}", oldToken, player.getScoreboardName());
+                LOGGER.info("Invalidated old token for player {}", player.getScoreboardName());
             }
         }
     }
@@ -153,7 +173,7 @@ public class TokenManager {
                 break;
             }
         }
-        LOGGER.info("Token {} validated and used for binding QQ {} to gameId {}", token, qq, info.gameId);
+        LOGGER.info("Token validated and used for binding QQ {} to gameId {}", qq, info.gameId);
         return info.gameId;
     }
 

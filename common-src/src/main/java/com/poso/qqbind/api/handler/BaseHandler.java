@@ -151,6 +151,14 @@ public abstract class BaseHandler implements HttpHandler {
     }
 
     /**
+     * 获取调用方 IP（用于令牌验证失败的限流统计）
+     */
+    protected String clientIp(HttpExchange exchange) {
+        java.net.InetAddress addr = exchange.getRemoteAddress().getAddress();
+        return addr != null ? addr.getHostAddress() : "unknown";
+    }
+
+    /**
      * 将 ErrorCode 映射为 HTTP 状态码（简化版）
      */
     private int mapErrorCodeToStatus(com.poso.qqbind.api.response.ErrorCode errorCode) {

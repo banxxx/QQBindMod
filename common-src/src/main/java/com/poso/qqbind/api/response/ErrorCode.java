@@ -34,6 +34,7 @@ public enum ErrorCode {
     BIND_FAILED(400, "绑定失败"),
     UNBIND_FAILED(400, "解绑失败"),
     INVALID_TOKEN_ERROR(400, "令牌无效或已过期"),
+    RATE_LIMITED(429, "验证失败次数过多，请稍后再试"),
     SERVER_NOT_AVAILABLE(503, "服务器不可用"),
     ;
 

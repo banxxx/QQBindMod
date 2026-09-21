@@ -30,7 +30,11 @@ public class QQBindConfig {
 
     // 配置字段（静态，全局可访问）
     public static int HTTP_PORT = 25566;
-    public static String API_TOKEN = "change-me-to-a-random-token";
+    /** HTTP API 监听地址：默认 0.0.0.0 保持旧行为，生产环境建议 127.0.0.1 或内网网卡地址 */
+    public static String HTTP_BIND_HOST = "0.0.0.0";
+    /** 默认占位 token——保持该值时拒绝启动 HTTP API */
+    public static final String DEFAULT_API_TOKEN = "change-me-to-a-random-token";
+    public static String API_TOKEN = DEFAULT_API_TOKEN;
     public static boolean ENABLE_WHITELIST_CHECK = true;
     public static String DATA_FILE_PATH = "qqbind/bindings.json";
     public static String SERVER_ID = "default";          // 服务器唯一标识
@@ -50,6 +54,10 @@ public class QQBindConfig {
     public static String DB_USER = "";
     public static String DB_PASSWORD = "";
     public static int CACHE_TTL_SECONDS = 60;
+    /** 数据库不可用时的健康检查/重试间隔（秒） */
+    public static int DB_RETRY_INTERVAL_SECONDS = 30;
+    /** 数据库最大重试次数，0 表示不限次数（到达上限后退避为低频探测） */
+    public static int DB_MAX_RETRIES = 0;
 
     /**
      * 加载或创建配置文件
@@ -83,6 +91,7 @@ public class QQBindConfig {
      */
     private static void applyConfig(JsonObject json) {
         if (json.has("httpPort")) HTTP_PORT = json.get("httpPort").getAsInt();
+        if (json.has("httpBindHost")) HTTP_BIND_HOST = json.get("httpBindHost").getAsString();
         if (json.has("apiToken")) API_TOKEN = json.get("apiToken").getAsString();
         if (json.has("enableWhitelistCheck")) ENABLE_WHITELIST_CHECK = json.get("enableWhitelistCheck").getAsBoolean();
         if (json.has("dataFilePath")) DATA_FILE_PATH = json.get("dataFilePath").getAsString();
@@ -101,6 +110,8 @@ public class QQBindConfig {
         if (json.has("dbUser")) DB_USER = json.get("dbUser").getAsString();
         if (json.has("dbPassword")) DB_PASSWORD = json.get("dbPassword").getAsString();
         if (json.has("cacheTtlSeconds")) CACHE_TTL_SECONDS = json.get("cacheTtlSeconds").getAsInt();
+        if (json.has("dbRetryIntervalSeconds")) DB_RETRY_INTERVAL_SECONDS = json.get("dbRetryIntervalSeconds").getAsInt();
+        if (json.has("dbMaxRetries")) DB_MAX_RETRIES = json.get("dbMaxRetries").getAsInt();
     }
 
     /**
@@ -117,6 +128,7 @@ public class QQBindConfig {
 
             JsonObject defaultJson = new JsonObject();
             defaultJson.addProperty("httpPort", HTTP_PORT);
+            defaultJson.addProperty("httpBindHost", HTTP_BIND_HOST);
             defaultJson.addProperty("apiToken", API_TOKEN);
             defaultJson.addProperty("enableWhitelistCheck", ENABLE_WHITELIST_CHECK);
             defaultJson.addProperty("dataFilePath", DATA_FILE_PATH);
@@ -133,6 +145,8 @@ public class QQBindConfig {
             defaultJson.addProperty("dbUser", DB_USER);
             defaultJson.addProperty("dbPassword", DB_PASSWORD);
             defaultJson.addProperty("cacheTtlSeconds", CACHE_TTL_SECONDS);
+            defaultJson.addProperty("dbRetryIntervalSeconds", DB_RETRY_INTERVAL_SECONDS);
+            defaultJson.addProperty("dbMaxRetries", DB_MAX_RETRIES);
 
             String jsonStr = GSON.toJson(defaultJson);
             Files.writeString(configPath, jsonStr);
@@ -140,6 +154,13 @@ public class QQBindConfig {
         } catch (Exception e) {
             LOGGER.error("Failed to create default config", e);
         }
+    }
+
+    /**
+     * token 仍为默认占位值或为空时返回 true（此状态下禁止启动 HTTP API）
+     */
+    public static boolean isApiTokenUnsafe() {
+        return API_TOKEN == null || API_TOKEN.isEmpty() || DEFAULT_API_TOKEN.equals(API_TOKEN);
     }
 
     /**

@@ -31,6 +31,10 @@ public class BindingManager {
 
     public BindingManager(DataStorage storage) {
         this.storage = storage;
+        // 注册恢复回调：DB 重连并补同步后，重校验在线玩家的限制状态
+        if (storage instanceof RemoteStorage) {
+            ((RemoteStorage) storage).setOnRecoveredCallback(this::revalidateOnlinePlayers);
+        }
         // 如果配置为 hybrid，则 primaryStorage 应该是 RemoteStorage，但我们仍保留 JsonStorage 作为备用
         // 但 RemoteStorage 内部已有 fallback，所以这里直接使用 primaryStorage
         this.storage.load();
@@ -59,38 +63,120 @@ public class BindingManager {
         CommandExecutor.addWhitelist(gameId);
 
         // ========== 绑定成功后检查玩家是否在线，若在线则解除限制 ==========
-        try {
-            MinecraftServer server = ServerProviderHolder.get().getCurrentServer();
-            if (server != null) {
-                ServerPlayer player = server.getPlayerList().getPlayerByName(gameId);
-                if (player != null) {
-                    if (PlayerStateManager.isRestricted(player)) {
-                        // 解除受限状态，恢复生存模式
-                        PlayerStateManager.setRestricted(player, false);
-                        LOGGER.info("玩家 {} 绑定成功，已解除限制", player.getScoreboardName());
-
-                        // ---- 使用模板发送绑定成功通知 ----
-                        String title = QQBindConfig.formatMessage(QQBindConfig.BIND_SUCCESS_TITLE, null);
-                        String subtitle = QQBindConfig.formatMessage(QQBindConfig.BIND_SUCCESS_SUBTITLE, null);
-                        String actionBar = QQBindConfig.formatMessage(QQBindConfig.BIND_SUCCESS_ACTION_BAR, null);
-
-                        player.connection.send(new ClientboundSetTitleTextPacket(
-                                Component.literal(title)));
-                        player.connection.send(new ClientboundSetSubtitleTextPacket(
-                                Component.literal(subtitle)));
-                        player.connection.send(new ClientboundSetTitlesAnimationPacket(10, 60, 10));
-
-                        player.connection.send(new ClientboundSetActionBarTextPacket(
-                                Component.literal(actionBar)));
-                    }
-                }
-            }
-        } catch (Exception e) {
-            LOGGER.warn("绑定成功后解除玩家限制时发生异常（不影响绑定本身）: {}", e.getMessage());
-        }
+        unrestrictOnlinePlayer(gameId);
 
         LOGGER.info("Bound QQ {} to game ID {}", qq, gameId);
         return new BindResult(true, "绑定成功！您现在可以登录服务器了。");
+    }
+
+    /**
+     * 若玩家在线且处于受限状态，解除限制并推送绑定成功通知。
+     * 异常不影响绑定/同步本身。
+     */
+    private void unrestrictOnlinePlayer(String gameId) {
+        try {
+            MinecraftServer server = ServerProviderHolder.get().getCurrentServer();
+            if (server == null) {
+                return;
+            }
+            ServerPlayer player = server.getPlayerList().getPlayerByName(gameId);
+            if (player == null || !PlayerStateManager.isRestricted(player)) {
+                return;
+            }
+            // 状态变更与标题发包统一排队到主线程，保证顺序
+            MainThread.post(() -> {
+                PlayerStateManager.setRestricted(player, false);
+                LOGGER.info("玩家 {} 绑定生效，已解除限制", player.getScoreboardName());
+
+                String title = QQBindConfig.formatMessage(QQBindConfig.BIND_SUCCESS_TITLE, null);
+                String subtitle = QQBindConfig.formatMessage(QQBindConfig.BIND_SUCCESS_SUBTITLE, null);
+                String actionBar = QQBindConfig.formatMessage(QQBindConfig.BIND_SUCCESS_ACTION_BAR, null);
+
+                player.connection.send(new ClientboundSetTitleTextPacket(Component.literal(title)));
+                player.connection.send(new ClientboundSetSubtitleTextPacket(Component.literal(subtitle)));
+                player.connection.send(new ClientboundSetTitlesAnimationPacket(10, 60, 10));
+                player.connection.send(new ClientboundSetActionBarTextPacket(Component.literal(actionBar)));
+            });
+        } catch (Exception e) {
+            LOGGER.warn("解除玩家限制时发生异常（不影响绑定本身）: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 若玩家在线，立即应用未绑定限制（旁观者 + 提示令牌）。
+     */
+    private void restrictOnlinePlayer(String gameId) {
+        try {
+            MinecraftServer server = ServerProviderHolder.get().getCurrentServer();
+            if (server == null) {
+                return;
+            }
+            ServerPlayer player = server.getPlayerList().getPlayerByName(gameId);
+            if (player == null) {
+                return;
+            }
+            PlayerStateManager.setRestricted(player, true);
+            PlayerStateManager.sendRestrictionMessage(player);
+            LOGGER.info("玩家 {} 绑定已失效，已应用限制", player.getScoreboardName());
+        } catch (Exception e) {
+            LOGGER.warn("限制玩家时发生异常: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 下行同步绑定（插件已直写中心库成功时调用）：
+     * 仅更新本地镜像与缓存，不写数据库；RemoteStorage 降级期间也能实时生效。
+     */
+    public void applySyncedBinding(String qq, String gameId) {
+        if (storage instanceof RemoteStorage) {
+            ((RemoteStorage) storage).syncFromCentral(qq, gameId);
+        } else {
+            storage.save(qq, gameId);
+        }
+        CommandExecutor.addWhitelist(gameId);
+        unrestrictOnlinePlayer(gameId);
+    }
+
+    /**
+     * 下行同步解绑（插件已从中心库删除时调用）：仅删本地镜像与缓存。
+     */
+    public void applySyncedUnbind(String gameId) {
+        if (storage instanceof RemoteStorage) {
+            ((RemoteStorage) storage).syncRemovalFromCentral(gameId);
+        } else {
+            storage.remove(gameId);
+        }
+        CommandExecutor.removeWhitelist(gameId);
+        restrictOnlinePlayer(gameId);
+    }
+
+    /**
+     * 数据库恢复并补同步后，重校验在线玩家：
+     * 已绑定但仍受限 → 解除限制；未绑定但未受限（非 OP）→ 应用限制。
+     */
+    public void revalidateOnlinePlayers() {
+        // 与 JOIN 处理一致：关闭绑定检查时不得对玩家施加/恢复限制
+        if (!QQBindConfig.ENABLE_WHITELIST_CHECK) {
+            return;
+        }
+        try {
+            MinecraftServer server = ServerProviderHolder.get().getCurrentServer();
+            if (server == null) {
+                return;
+            }
+            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                String name = player.getName().getString();
+                boolean bound = storage.getQQ(name) != null;
+                if (bound && PlayerStateManager.isRestricted(player)) {
+                    unrestrictOnlinePlayer(name);
+                } else if (!bound && !PlayerStateManager.isRestricted(player) && !player.hasPermissions(4)) {
+                    restrictOnlinePlayer(name);
+                }
+            }
+            LOGGER.info("数据库恢复后已完成在线玩家重校验");
+        } catch (Exception e) {
+            LOGGER.warn("在线玩家重校验失败: {}", e.getMessage());
+        }
     }
 
     public void close() {
@@ -119,22 +205,8 @@ public class BindingManager {
         // 移除白名单
         CommandExecutor.removeWhitelist(gameId);
 
-        // ---- 检查玩家是否在线，若在线则立即应用限制 ----
-        try {
-            MinecraftServer server = ServerProviderHolder.get().getCurrentServer();
-            if (server != null) {
-                ServerPlayer player = server.getPlayerList().getPlayerByName(gameId);
-                if (player != null) {
-                    // 1. 设置为受限状态（旁观者模式）
-                    PlayerStateManager.setRestricted(player, true);
-                    // 2. 发送受限提示消息（自动生成令牌）
-                    PlayerStateManager.sendRestrictionMessage(player);
-                    LOGGER.info("玩家 {} 已被解绑，已应用限制", player.getScoreboardName());
-                }
-            }
-        } catch (Exception e) {
-            LOGGER.warn("解绑后限制玩家时发生异常: {}", e.getMessage());
-        }
+        // ---- 若玩家在线，立即应用限制 ----
+        restrictOnlinePlayer(gameId);
 
         LOGGER.info("Unbound game ID {} (QQ: {})", gameId, qq);
         return true;
@@ -154,22 +226,8 @@ public class BindingManager {
         // 移除白名单
         CommandExecutor.removeWhitelist(gameId);
 
-        // ---- 检查玩家是否在线，若在线则立即应用限制 ----
-        try {
-            MinecraftServer server = ServerProviderHolder.get().getCurrentServer();
-            if (server != null) {
-                ServerPlayer player = server.getPlayerList().getPlayerByName(gameId);
-                if (player != null) {
-                    // 1. 设置为受限状态（旁观者模式）
-                    PlayerStateManager.setRestricted(player, true);
-                    // 2. 发送受限提示消息（自动生成令牌）
-                    PlayerStateManager.sendRestrictionMessage(player);
-                    LOGGER.info("玩家 {} 已被解绑，已应用限制", player.getScoreboardName());
-                }
-            }
-        } catch (Exception e) {
-            LOGGER.warn("解绑后限制玩家时发生异常: {}", e.getMessage());
-        }
+        // ---- 若玩家在线，立即应用限制 ----
+        restrictOnlinePlayer(gameId);
 
         LOGGER.info("Unbound QQ {} (game ID: {})", qq, gameId);
         return true;
