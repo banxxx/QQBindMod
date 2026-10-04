@@ -166,6 +166,27 @@ public class PlayerActivityManager {
     }
 
     /**
+     * 按玩家名反查 UUID（忽略大小写）
+     * 供离线玩家统计查询使用：本地图来源于真实登录/退出事件，
+     * 查不到时调用方再去读 usercache.json 文件，而不是走原版 profile cache
+     * （后者在缓存未命中时会向 Mojang 发起查询并把档案写入 usercache.json）。
+     *
+     * @return 玩家 UUID，本服从未记录过该名字时返回 null
+     */
+    public static UUID findUUIDByName(String name) {
+        if (name == null || name.isEmpty()) {
+            return null;
+        }
+        for (Map.Entry<UUID, PlayerActivity> entry : players.entrySet()) {
+            PlayerActivity activity = entry.getValue();
+            if (activity.name != null && activity.name.equalsIgnoreCase(name)) {
+                return entry.getKey();
+            }
+        }
+        return null;
+    }
+
+    /**
      * 获取全局最后活动信息（供 /api/status 使用）
      * @return LastActivityInfo 或 null（无任何记录时）
      */

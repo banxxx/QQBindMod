@@ -31,6 +31,15 @@ public interface DataStorage {
     String getQQ(String gameId);
 
     /**
+     * 非阻塞获取 QQ：只读内存数据（缓存与本地镜像），绝不发起数据库 IO。
+     * 供玩家登录等主线程路径使用，避免 DB 抖动时阻塞 server tick。
+     * 默认实现即 {@link #getQQ(String)}（本地存储本身就是纯内存读）。
+     */
+    default String getQQNonBlocking(String gameId) {
+        return getQQ(gameId);
+    }
+
+    /**
      * 通过 QQ 获取游戏 ID
      */
     String getGameId(String qq);

@@ -3,11 +3,13 @@ package com.poso.qqbind.utils;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
-import com.mojang.authlib.GameProfile;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.storage.LevelResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import com.poso.qqbind.core.PlayerActivityManager;
 
 import java.io.Reader;
 import java.nio.file.Files;
@@ -71,22 +73,30 @@ public class OfflineStatsReader {
     }
 
     /**
-     * 从服务器的 profile cache 或 usercache.json 中查找玩家 UUID
+     * 查找玩家 UUID。
+     * 注意：这里绝不能调用 server.getProfileCache().get(name)——原版实现在缓存未命中
+     * 或条目过期时会向 Mojang 会话服务发起按名查询，并把查到的档案 add 进缓存、
+     * 立即 save() 重写 usercache.json，导致从未在本服登录过的玩家出现在该文件中。
+     * 因此只使用以下三种无副作用的本地来源，按优先级依次尝试：
      */
     private static UUID findPlayerUUID(MinecraftServer server, String playerName) {
-        // 方式1：从服务器的 GameProfileCache 查找（原版 API，三平台一致）
-        try {
-            if (server.getProfileCache() != null) {
-                Optional<GameProfile> profile = server.getProfileCache().get(playerName);
-                if (profile.isPresent()) {
-                    return profile.get().getId();
-                }
-            }
-        } catch (Exception e) {
-            LOGGER.debug("从 profile cache 查找失败: {}", e.getMessage());
+        // 来源1：当前在线的玩家，直接从内存玩家列表取
+        ServerPlayer online = server.getPlayerList().getPlayerByName(playerName);
+        if (online != null) {
+            return online.getUUID();
         }
 
-        // 方式2：从 usercache.json 中查找（使用相对路径，跨平台通用）
+        // 来源2：本地活动记录（来源为真实登录/退出事件，覆盖所有上过线的玩家）
+        try {
+            UUID uuid = PlayerActivityManager.findUUIDByName(playerName);
+            if (uuid != null) {
+                return uuid;
+            }
+        } catch (Exception e) {
+            LOGGER.debug("从活动记录查找 {} 失败: {}", playerName, e.getMessage());
+        }
+
+        // 来源3：只读 usercache.json 文件作为兜底（只读文件，不触碰 profile cache）
         try {
             Path usercache = Path.of("usercache.json");
             if (Files.exists(usercache)) {
@@ -94,14 +104,14 @@ public class OfflineStatsReader {
                     JsonArray arr = JsonParser.parseReader(reader).getAsJsonArray();
                     for (int i = 0; i < arr.size(); i++) {
                         JsonObject obj = arr.get(i).getAsJsonObject();
-                        if (obj.has("name") && playerName.equals(obj.get("name").getAsString())) {
+                        if (obj.has("name") && playerName.equalsIgnoreCase(obj.get("name").getAsString())) {
                             return UUID.fromString(obj.get("uuid").getAsString());
                         }
                     }
                 }
             }
         } catch (Exception e) {
-            LOGGER.debug("从 usercache.json 查找失败: {}", e.getMessage());
+            LOGGER.debug("从 usercache.json 查找 {} 失败: {}", playerName, e.getMessage());
         }
 
         return null;

@@ -38,12 +38,17 @@ public class EventHandler {
 
         if (player.hasPermissions(4)) return;
 
-        if (!bindingManager.isBound(gameId)) {
+        // 非阻塞判定（只读缓存/本地镜像），绝不因 DB 查询阻塞主线程 tick。
+        // 缓存未热时先按未绑定处理，再异步回源校正，避免误限已绑定玩家。
+        if (!bindingManager.isBoundFast(gameId)) {
             // 1. 标记为受限状态（旁观者模式）
             PlayerStateManager.setRestricted(player, true);
 
             // 2. 发送提示消息（自动生成令牌）
             PlayerStateManager.sendRestrictionMessage(player);
+
+            // 3. 异步回源：若实际已绑定（镜像滞后），解除限制
+            bindingManager.verifyBindingAsync(gameId);
 
             LOGGER.info("玩家 {} 未绑定，已应用限制并发送提示", player.getScoreboardName());
         } else {

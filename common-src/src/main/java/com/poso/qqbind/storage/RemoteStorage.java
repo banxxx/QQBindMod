@@ -339,6 +339,20 @@ public class RemoteStorage implements DataStorage {
         }
     }
 
+    /**
+     * 非阻塞读取：只查内存缓存与本地 JSON 镜像，绝不发起数据库 IO。
+     * 供玩家登录等主线程路径使用；缓存未命中时以本地镜像为准（可能略滞后），
+     * 调用方应配合 BindingManager.verifyBindingAsync 异步回源校正。
+     */
+    @Override
+    public String getQQNonBlocking(String gameId) {
+        String cachedQQ = CacheManager.get(gameId);
+        if (cachedQQ != null) {
+            return cachedQQ.isEmpty() ? null : cachedQQ;
+        }
+        return localFallback.getQQ(gameId);
+    }
+
     @Override
     public String getGameId(String qq) {
         if (!dbAvailable) {

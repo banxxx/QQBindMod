@@ -21,11 +21,29 @@ public class CommandExecutor {
     private static final Logger LOGGER = LoggerFactory.getLogger(CommandExecutor.class);
 
     public static void addWhitelist(String gameId) {
+        if (!isValidGameId(gameId)) {
+            return;
+        }
         executeCommand("whitelist add " + gameId);
     }
 
     public static void removeWhitelist(String gameId) {
+        if (!isValidGameId(gameId)) {
+            return;
+        }
         executeCommand("whitelist remove " + gameId);
+    }
+
+    /**
+     * 命令执行前的最后一道防线：gameId 会被拼接进控制台命令，
+     * 只放行合法玩家名，拒绝选择器、引号、空白等一切特殊输入。
+     */
+    private static boolean isValidGameId(String gameId) {
+        if (!com.poso.qqbind.utils.GameIdValidator.isValid(gameId)) {
+            LOGGER.warn("拒绝执行命令：gameId 非法（不匹配 [A-Za-z0-9_]{{1,16}}）：{}", gameId);
+            return false;
+        }
+        return true;
     }
 
     private static void executeCommand(String command) {

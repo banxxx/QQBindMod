@@ -33,10 +33,16 @@ public class FabricEventHandler {
         // 跳过 OP 玩家（权限等级 >= 4）
         if (player.hasPermissions(4)) return;
 
-        if (!manager.isBound(gameId)) {
+        // 非阻塞判定（只读缓存/本地镜像），绝不因 DB 查询阻塞主线程 tick。
+        // 缓存未热时先按未绑定处理，再异步回源校正，避免误限已绑定玩家。
+        if (!manager.isBoundFast(gameId)) {
             // 未绑定 → 限制
             PlayerStateManager.setRestricted(player, true);
             PlayerStateManager.sendRestrictionMessage(player);
+
+            // 异步回源：若实际已绑定（镜像滞后），解除限制
+            manager.verifyBindingAsync(gameId);
+
             LOGGER.info("玩家 {} 未绑定，已应用限制并发送提示", gameId);
         } else {
             // 已绑定，但若之前因某种原因仍处于受限状态，解除限制

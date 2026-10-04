@@ -267,12 +267,19 @@ public class WebServer {
                 throw new BusinessException(ErrorCode.SERVER_NOT_AVAILABLE);
             }
 
+            // 游戏状态（玩家列表、延迟、TPS、MOTD 等）必须在主线程做快照：
+            // 玩家列表是普通 ArrayList，统计计数器非线程安全，HTTP 线程直接读会撕裂数据或 CME
+            JsonObject gameInfo = MainThread.call(3000, WebServer.this::collectStatusSnapshot);
+
             JsonObject serverInfo = new JsonObject();
             serverInfo.addProperty("name", "本服");
-            serverInfo.addProperty("online_players", server.getPlayerCount());
-            serverInfo.addProperty("max_players", server.getMaxPlayers());
-            serverInfo.addProperty("version", PlatformInfoHolder.getDisplay());
-            serverInfo.addProperty("motd", server.getMotd());
+            serverInfo.addProperty("online_players", gameInfo.get("online_players").getAsInt());
+            serverInfo.addProperty("max_players", gameInfo.get("max_players").getAsInt());
+            serverInfo.addProperty("version", gameInfo.get("version").getAsString());
+            serverInfo.addProperty("motd", gameInfo.get("motd").getAsString());
+            serverInfo.addProperty("tps", gameInfo.get("tps").getAsDouble());
+            serverInfo.addProperty("latency", gameInfo.get("latency").getAsDouble());
+            serverInfo.add("players", gameInfo.getAsJsonArray("players"));
 
             // 存储与数据库连接状态（供机器人端展示降级提示）
             serverInfo.addProperty("storage_mode", QQBindConfig.STORAGE_MODE);
@@ -282,32 +289,6 @@ public class WebServer {
             } else {
                 serverInfo.addProperty("db_available", false);
             }
-
-            double tps = getTPS(server);
-            serverInfo.addProperty("tps", tps);
-
-            Collection<ServerPlayer> players = server.getPlayerList().getPlayers();
-            double avgLatency = players.stream().mapToDouble(p -> {
-                if (latencyField != null) {
-                    try {
-                        return latencyField.getInt(p);
-                    } catch (IllegalAccessException e) {
-                        return 0.0;
-                    }
-                }
-                return 0.0;
-            }).average().orElse(0);
-            serverInfo.addProperty("latency", avgLatency);
-
-            JsonArray playersArray = new JsonArray();
-            for (ServerPlayer player : players) {
-                JsonObject p = new JsonObject();
-                p.addProperty("name", player.getName().getString());
-                p.addProperty("uuid", player.getUUID().toString());
-                p.addProperty("is_premium", true);
-                playersArray.add(p);
-            }
-            serverInfo.add("players", playersArray);
 
             PlayerActivityManager.LastActivityInfo lastActivity = PlayerActivityManager.getLastActivity();
             if (lastActivity != null) {
@@ -320,6 +301,42 @@ public class WebServer {
 
             sendSuccess(exchange, serverInfo);
         }
+    }
+
+    /**
+     * 在主线程收集 /api/status 需要的游戏状态快照（只做读取，返回纯 JSON 数据）。
+     */
+    private JsonObject collectStatusSnapshot(MinecraftServer server) {
+        JsonObject info = new JsonObject();
+        info.addProperty("online_players", server.getPlayerCount());
+        info.addProperty("max_players", server.getMaxPlayers());
+        info.addProperty("version", PlatformInfoHolder.getDisplay());
+        info.addProperty("motd", server.getMotd());
+        info.addProperty("tps", getTPS(server));
+
+        Collection<ServerPlayer> players = server.getPlayerList().getPlayers();
+        double avgLatency = players.stream().mapToDouble(p -> {
+            if (latencyField != null) {
+                try {
+                    return latencyField.getInt(p);
+                } catch (IllegalAccessException e) {
+                    return 0.0;
+                }
+            }
+            return 0.0;
+        }).average().orElse(0);
+        info.addProperty("latency", avgLatency);
+
+        JsonArray playersArray = new JsonArray();
+        for (ServerPlayer player : players) {
+            JsonObject p = new JsonObject();
+            p.addProperty("name", player.getName().getString());
+            p.addProperty("uuid", player.getUUID().toString());
+            p.addProperty("is_premium", true);
+            playersArray.add(p);
+        }
+        info.add("players", playersArray);
+        return info;
     }
 
     /**
@@ -345,10 +362,14 @@ public class WebServer {
             }
 
             Map<String, Object> statsMap;
-            ServerPlayer player = server.getPlayerList().getPlayerByName(playerName);
-            if (player != null) {
-                // 玩家在线：从内存读取
-                statsMap = com.poso.qqbind.utils.StatUtils.getPlayerStats(player);
+            // 在线玩家的统计读取必须在主线程做（StatsCounter 为非线程安全 map，
+            // 主线程 tick 中并发累加，HTTP 线程直接读可能拿到 rehash 中间态）
+            Map<String, Object> onlineStats = MainThread.call(3000, srv -> {
+                ServerPlayer online = srv.getPlayerList().getPlayerByName(playerName);
+                return online == null ? null : com.poso.qqbind.utils.StatUtils.getPlayerStats(online);
+            });
+            if (onlineStats != null) {
+                statsMap = onlineStats;
             } else {
                 // 玩家离线：从磁盘读取
                 statsMap = com.poso.qqbind.utils.OfflineStatsReader.getPlayerStatsFromDisk(server, playerName);
@@ -386,7 +407,7 @@ public class WebServer {
                 throw new BusinessException(ErrorCode.SERVER_NOT_AVAILABLE);
             }
 
-            double tps = getTPS(server);
+            double tps = MainThread.call(3000, WebServer.this::getTPS);
             JsonObject data = new JsonObject();
             data.addProperty("tps", tps);
             sendSuccess(exchange, data);
@@ -420,8 +441,8 @@ public class WebServer {
             // 构建屏幕中央显示的消息
             Component titleComponent = Component.literal(message);
 
-            // 主线程快照在线人数，实际发包排队到主线程执行
-            int playerCount = server.getPlayerList().getPlayers().size();
+            // 发包整体在主线程执行；HTTP 线程只通过主线程快照拿一个展示用人数
+            int playerCount = MainThread.call(3000, srv -> srv.getPlayerList().getPlayers().size());
             MainThread.post(() -> {
                 for (ServerPlayer player : server.getPlayerList().getPlayers()) {
                     // 发送大标题

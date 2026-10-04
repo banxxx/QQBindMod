@@ -50,7 +50,7 @@ public class ServerCommands {
             manager.reload();
         }
         context.getSource().sendSuccess(
-                () -> Component.literal("§aQQBindMod 已重新加载配置和数据！"),
+                () -> Component.literal("§aQQBindMod 配置已重载，绑定数据正在后台重新加载（含数据库校验）..."),
                 true
         );
         return 1;
