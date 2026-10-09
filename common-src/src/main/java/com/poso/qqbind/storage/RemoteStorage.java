@@ -209,17 +209,17 @@ public class RemoteStorage implements DataStorage {
     }
 
     /**
-     * 从数据库全量拉取当前群组绑定并合并到本地 JSON（DB 数据优先）
+     * 从数据库全量拉取当前群组绑定并替换本地 JSON 镜像（以数据库为准，含 0 条的情况）。
+     * 查询失败时抛异常、本地镜像保持原样，避免把一次网络抖动当成"数据库清空了"。
      */
     private void fullSyncFromDatabase(String phase) {
         try {
             Map<String, String> allFromDB = getAllFromDatabase();
+            localFallback.replaceAll(allFromDB);
             if (allFromDB.isEmpty()) {
-                LOGGER.warn("（{}）数据库无绑定记录，保留本地 JSON（本地有 {} 条）",
-                        phase, localFallback.getAll().size());
+                LOGGER.warn("（{}）本群在数据库中无任何绑定记录，本地镜像已同步清空", phase);
             } else {
-                localFallback.mergeAll(allFromDB);
-                LOGGER.info("（{}）全量同步完成，数据库 {} 条已合并到本地", phase, allFromDB.size());
+                LOGGER.info("（{}）全量同步完成，本地镜像对齐数据库 {} 条", phase, allFromDB.size());
             }
         } catch (Exception e) {
             LOGGER.error("（{}）全量同步失败，将依赖按需查询", phase, e);
@@ -261,7 +261,7 @@ public class RemoteStorage implements DataStorage {
         return Duration.between(now, next).toMillis();
     }
 
-    /** 每日定时同步任务（合并模式，保留本地独有记录） */
+    /** 每日定时同步任务（全量替换，本地镜像与数据库对齐） */
     private void dailySyncTask() {
         try {
             if (!dbAvailable) {
@@ -404,7 +404,8 @@ public class RemoteStorage implements DataStorage {
                 }
             }
         }
-        // 远程失败或不可用，降级到本地 JSON（DB 恢复后以数据库数据为准，本条仅本服生效）
+        // 远程失败或不可用，降级到本地 JSON。全量同步以数据库为准，
+        // 本条只在 DB 补写成功前（或本服单独生效期间）留在镜像里。
         LOGGER.warn("数据库不可用，绑定 {} -> {} 仅写入本地 JSON", gameId, qq);
         localFallback.save(qq, gameId);
         CacheManager.invalidate(gameId); // 清除缓存，避免不一致

@@ -4,6 +4,8 @@ import com.poso.qqbind.QQBindConfig;
 import com.poso.qqbind.api.WebServer;
 import com.poso.qqbind.api.holder.PlatformInfoHolder;
 import com.poso.qqbind.core.BindingManager;
+import com.poso.qqbind.core.TickTracker;
+import com.poso.qqbind.core.PlayerPing;
 import com.poso.qqbind.server.ServerProviderHolder;
 import com.poso.qqbind.storage.DataStorage;
 import com.poso.qqbind.storage.JsonStorage;
@@ -11,6 +13,7 @@ import com.poso.qqbind.storage.RemoteStorage;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,6 +32,9 @@ public class FabricModInitializer implements ModInitializer {
         PlatformInfoHolder.setDisplay("Fabric 1.21.1");
         // 1. 设置服务器提供者（Fabric 实现）
         ServerProviderHolder.setProvider(new FabricServerProvider());
+
+        // 延迟读取口：1.21.1 字段已移到 connection 上，用公开 getter
+        PlayerPing.register(player -> player.connection.latency());
 
         // 2. 加载配置（若不存在则创建默认配置）
         QQBindConfig.load();
@@ -64,6 +70,10 @@ public class FabricModInitializer implements ModInitializer {
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) ->
                 FabricEventHandler.onPlayerLogout(handler.getPlayer()));
 
+        // 6b. 自测 tick 环：TPS/mspt 由模组自己计时，不再反射原版字段（反射名在生产环境已被改名）
+        ServerTickEvents.START_SERVER_TICK.register(server -> TickTracker.onTickStart());
+        ServerTickEvents.END_SERVER_TICK.register(server -> TickTracker.onTickEnd());
+
         // 7. 注册命令
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 FabricServerCommands.register(dispatcher));
@@ -74,6 +84,7 @@ public class FabricModInitializer implements ModInitializer {
         // 9. 监听服务器启动事件，将服务器实例缓存到 FabricServerProvider
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             FabricServerProvider.setServer(server);
+            TickTracker.reset();
             LOGGER.info("Fabric server instance cached.");
         });
 

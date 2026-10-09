@@ -24,10 +24,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.lang.reflect.Field;
 import java.net.InetSocketAddress;
 import java.util.Collection;
 import java.util.Map;
+import java.util.OptionalDouble;
 import java.util.concurrent.Executors;
 
 /**
@@ -41,27 +41,6 @@ public class WebServer {
     private static final Logger LOGGER = LoggerFactory.getLogger(WebServer.class);
     private final BindingManager bindingManager;
     private HttpServer server;
-
-    // 反射缓存字段
-    private static Field latencyField;
-    private static Field tickTimesField;
-
-    static {
-        try {
-            latencyField = ServerPlayer.class.getDeclaredField("latency");
-            latencyField.setAccessible(true);
-            LOGGER.info("Successfully found latency field in ServerPlayer");
-        } catch (NoSuchFieldException e) {
-            LOGGER.warn("latency field not found in ServerPlayer, latency will be 0", e);
-        }
-        try {
-            tickTimesField = MinecraftServer.class.getDeclaredField("tickTimes");
-            tickTimesField.setAccessible(true);
-            LOGGER.info("Successfully found tickTimes field in MinecraftServer");
-        } catch (NoSuchFieldException e) {
-            LOGGER.warn("tickTimes field not found in MinecraftServer, TPS will always return 20.0", e);
-        }
-    }
 
     public WebServer(BindingManager bindingManager) {
         this.bindingManager = bindingManager;
@@ -277,8 +256,11 @@ public class WebServer {
             serverInfo.addProperty("max_players", gameInfo.get("max_players").getAsInt());
             serverInfo.addProperty("version", gameInfo.get("version").getAsString());
             serverInfo.addProperty("motd", gameInfo.get("motd").getAsString());
-            serverInfo.addProperty("tps", gameInfo.get("tps").getAsDouble());
-            serverInfo.addProperty("latency", gameInfo.get("latency").getAsDouble());
+            for (String metric : new String[]{"tps", "mspt", "tps_real", "latency"}) {
+                if (gameInfo.has(metric)) {
+                    serverInfo.addProperty(metric, gameInfo.get(metric).getAsDouble());
+                }
+            }
             serverInfo.add("players", gameInfo.getAsJsonArray("players"));
 
             // 存储与数据库连接状态（供机器人端展示降级提示）
@@ -312,20 +294,17 @@ public class WebServer {
         info.addProperty("max_players", server.getMaxPlayers());
         info.addProperty("version", PlatformInfoHolder.getDisplay());
         info.addProperty("motd", server.getMotd());
-        info.addProperty("tps", getTPS(server));
+        addTickMetrics(info);
 
         Collection<ServerPlayer> players = server.getPlayerList().getPlayers();
-        double avgLatency = players.stream().mapToDouble(p -> {
-            if (latencyField != null) {
-                try {
-                    return latencyField.getInt(p);
-                } catch (IllegalAccessException e) {
-                    return 0.0;
-                }
-            }
-            return 0.0;
-        }).average().orElse(0);
-        info.addProperty("latency", avgLatency);
+        // 延迟取在线玩家 ping 的均值；读取口没注入或没人在线时省略字段，别拿 0 冒充低延迟
+        OptionalDouble avgLatency = players.stream()
+                .mapToInt(PlayerPing::get)
+                .filter(ms -> ms >= 0)
+                .average();
+        if (avgLatency.isPresent()) {
+            info.addProperty("latency", avgLatency.getAsDouble());
+        }
 
         JsonArray playersArray = new JsonArray();
         for (ServerPlayer player : players) {
@@ -407,9 +386,10 @@ public class WebServer {
                 throw new BusinessException(ErrorCode.SERVER_NOT_AVAILABLE);
             }
 
-            double tps = MainThread.call(3000, WebServer.this::getTPS);
+            // 指标由主线程每 tick 发布，这里只读 volatile，不必再回主线程（也就不存在
+            // 主线程卡住时 HTTP 等 3 秒的问题）；主线程卡住会让 TickTracker 判定为"未测得"
             JsonObject data = new JsonObject();
-            data.addProperty("tps", tps);
+            addTickMetrics(data);
             sendSuccess(exchange, data);
         }
     }
@@ -596,36 +576,15 @@ public class WebServer {
     // ========== 工具方法 ==========
 
     /**
-     * 计算当前服务器的 TPS（基于 tickTimes 数组）
-     * 兼容 Forge 和 NeoForge（通过反射）
+     * 把 TickTracker 的三个指标写进 JSON；未测得（NaN）的项直接省略，
+     * 让机器人端走"没有这个字段"的分支，而不是拿 20.0 冒充测量值。
      */
-    private double getTPS(MinecraftServer server) {
-        if (tickTimesField == null) {
-            return 20.0;
-        }
-        try {
-            long[] tickTimes = (long[]) tickTimesField.get(server);
-            if (tickTimes == null || tickTimes.length == 0) {
-                return 20.0;
-            }
-            int count = 0;
-            long sum = 0;
-            for (int i = 0; i < tickTimes.length && count < 20; i++) {
-                long time = tickTimes[i];
-                if (time > 0) {
-                    sum += time;
-                    count++;
-                }
-            }
-            if (count == 0) {
-                return 20.0;
-            }
-            double avgNanos = (double) sum / count;
-            double avgMs = avgNanos / 1_000_000.0;
-            return Math.min(20.0, 1000.0 / avgMs);
-        } catch (IllegalAccessException e) {
-            LOGGER.warn("Failed to access tickTimes via reflection", e);
-            return 20.0;
-        }
+    private void addTickMetrics(JsonObject target) {
+        double tps = com.poso.qqbind.core.TickTracker.getTps();
+        double mspt = com.poso.qqbind.core.TickTracker.getMspt();
+        double realTps = com.poso.qqbind.core.TickTracker.getRealTps();
+        if (!Double.isNaN(tps)) target.addProperty("tps", tps);
+        if (!Double.isNaN(mspt)) target.addProperty("mspt", mspt);
+        if (!Double.isNaN(realTps)) target.addProperty("tps_real", realTps);
     }
 }

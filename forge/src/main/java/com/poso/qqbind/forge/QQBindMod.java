@@ -6,6 +6,7 @@ import com.poso.qqbind.api.WebServer;
 import com.poso.qqbind.api.holder.PlatformInfoHolder;
 import com.poso.qqbind.core.BindingManager;
 import com.poso.qqbind.core.PlayerActivityManager;
+import com.poso.qqbind.core.PlayerPing;
 import com.poso.qqbind.server.ServerProviderHolder;
 import com.poso.qqbind.storage.DataStorage;
 import com.poso.qqbind.storage.JsonStorage;
@@ -56,6 +57,9 @@ public class QQBindMod {
         MinecraftForge.EVENT_BUS.register(new EventHandler());
         MinecraftForge.EVENT_BUS.register(new ServerCommands());
         MinecraftForge.EVENT_BUS.register(new RestrictionHandler());
+
+        // 延迟读取口：1.20.1 这里是 ServerPlayer 上的公开字段
+        PlayerPing.register(player -> player.latency);
 
         LOGGER.info("QQBindMod (Forge) initialized!");
     }

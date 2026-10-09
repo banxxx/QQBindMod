@@ -5,9 +5,12 @@ import com.poso.qqbind.QQBindConfig;
 import com.poso.qqbind.core.BindingManager;
 import com.poso.qqbind.core.PlayerActivityManager;
 import com.poso.qqbind.core.PlayerStateManager;
+import com.poso.qqbind.core.TickTracker;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
+import net.neoforged.neoforge.event.server.ServerStartedEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import org.slf4j.Logger;
 
 
@@ -67,5 +70,21 @@ public class EventHandler {
             }
             PlayerStateManager.removePlayer(player);
         }
+    }
+
+    // Pre/Post 之间的耗时就是 /forge tps 用的那个 mspt 样本
+    @SubscribeEvent
+    public void onServerTickPre(ServerTickEvent.Pre event) {
+        TickTracker.onTickStart();
+    }
+
+    @SubscribeEvent
+    public void onServerTickPost(ServerTickEvent.Post event) {
+        TickTracker.onTickEnd();
+    }
+
+    @SubscribeEvent
+    public void onServerStarted(ServerStartedEvent event) {
+        TickTracker.reset();
     }
 }

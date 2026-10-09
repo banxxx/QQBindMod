@@ -6,6 +6,7 @@ import com.poso.qqbind.api.WebServer;
 import com.poso.qqbind.api.holder.PlatformInfoHolder;
 import com.poso.qqbind.core.BindingManager;
 import com.poso.qqbind.core.PlayerActivityManager;
+import com.poso.qqbind.core.PlayerPing;
 import com.poso.qqbind.server.ServerProviderHolder;
 import com.poso.qqbind.storage.DataStorage;
 import com.poso.qqbind.storage.JsonStorage;
@@ -50,6 +51,9 @@ public class QQBindMod {
         NeoForge.EVENT_BUS.register(new EventHandler());
         NeoForge.EVENT_BUS.register(new ServerCommands());
         NeoForge.EVENT_BUS.register(new RestrictionHandler());
+
+        // 延迟读取口：1.21.1 字段已移到 connection 上，用公开 getter
+        PlayerPing.register(player -> player.connection.latency());
 
         LOGGER.info("QQBindMod (NeoForge) initialized!");
     }

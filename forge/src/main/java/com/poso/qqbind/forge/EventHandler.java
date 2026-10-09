@@ -5,8 +5,11 @@ import com.poso.qqbind.QQBindConfig;
 import com.poso.qqbind.core.BindingManager;
 import com.poso.qqbind.core.PlayerActivityManager;
 import com.poso.qqbind.core.PlayerStateManager;
+import com.poso.qqbind.core.TickTracker;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import org.slf4j.Logger;
 
@@ -67,5 +70,20 @@ public class EventHandler {
             }
             PlayerStateManager.removePlayer(player);
         }
+    }
+
+    // START/END 之间的耗时就是 /forge tps 用的那个 mspt 样本
+    @SubscribeEvent
+    public void onServerTick(TickEvent.ServerTickEvent event) {
+        if (event.phase == TickEvent.Phase.START) {
+            TickTracker.onTickStart();
+        } else {
+            TickTracker.onTickEnd();
+        }
+    }
+
+    @SubscribeEvent
+    public void onServerStarted(ServerStartedEvent event) {
+        TickTracker.reset();
     }
 }
