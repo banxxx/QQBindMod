@@ -40,6 +40,7 @@ public class TokenManager {
             try {
                 cleanupExpiredTokens();
                 TokenRateLimiter.cleanup();
+                CommandRateLimiter.cleanup();
             } catch (Exception e) {
                 LOGGER.warn("Token cleanup failed: {}", e.getMessage());
             }

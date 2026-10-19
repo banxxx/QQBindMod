@@ -7,6 +7,7 @@ import com.poso.qqbind.api.exception.BusinessException;
 import com.poso.qqbind.api.exception.InvalidParameterException;
 import com.poso.qqbind.api.exception.ResourceNotFoundException;
 import com.poso.qqbind.api.handler.BaseHandler;
+import com.poso.qqbind.api.handler.ConsoleCommandHandler;
 import com.poso.qqbind.api.holder.PlatformInfoHolder;
 import com.poso.qqbind.api.response.ErrorCode;
 import com.poso.qqbind.core.*;
@@ -52,6 +53,12 @@ public class WebServer {
                     + "请在 config/qqbind/qqbind-config.json 中将 apiToken 设置为随机长字符串，并与 QQ 机器人插件保持一致后重启服务器。");
             return;
         }
+        if (QQBindConfig.isConsoleTokenWeak()) {
+            LOGGER.error("检测到 consoleToken 已设置但强度不足（短于 16 位或仍是占位值），已拒绝启动 HTTP API。"
+                    + "控制台命令接口等同于服务器控制台权限，请改用随机长字符串后重启服务器；"
+                    + "若不需要该接口，将 consoleToken 置空即可。");
+            return;
+        }
         try {
             int port = QQBindConfig.HTTP_PORT;
             String bindHost = QQBindConfig.HTTP_BIND_HOST;
@@ -71,6 +78,11 @@ public class WebServer {
             server.createContext("/api/validate_token", new ValidateTokenHandler());
             server.createContext("/api/cache/invalidate", new CacheInvalidateHandler());
             server.createContext("/api/sync_binding", new SyncBindingHandler());
+            if (QQBindConfig.isConsoleEnabled()) {
+                server.createContext("/api/console", new ConsoleCommandHandler());
+                LOGGER.warn("已启用控制台命令接口 /api/console（等同于服务器控制台权限）。"
+                        + "请确认 httpBindHost 为 127.0.0.1 或内网地址并在防火墙限制来源；consoleToken 泄露即控制台泄露。");
+            }
 
             server.setExecutor(Executors.newCachedThreadPool());
             server.start();

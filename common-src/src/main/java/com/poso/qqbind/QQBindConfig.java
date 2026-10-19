@@ -38,6 +38,10 @@ public class QQBindConfig {
     public static boolean ENABLE_WHITELIST_CHECK = true;
     public static String DATA_FILE_PATH = "qqbind/bindings.json";
     public static String SERVER_ID = "default";          // 服务器唯一标识
+    /** 控制台命令接口令牌：留空即不注册 /api/console */
+    public static String CONSOLE_TOKEN = "";
+    /** 额外禁用的命令（逗号分隔），与代码内的永久硬禁清单叠加 */
+    public static String CONSOLE_BANNED_COMMANDS = "";
 
     // 消息模板配置
     public static String QQ_GROUP = "123456789";
@@ -96,6 +100,8 @@ public class QQBindConfig {
         if (json.has("enableWhitelistCheck")) ENABLE_WHITELIST_CHECK = json.get("enableWhitelistCheck").getAsBoolean();
         if (json.has("dataFilePath")) DATA_FILE_PATH = json.get("dataFilePath").getAsString();
         if (json.has("serverId")) SERVER_ID = json.get("serverId").getAsString();
+        if (json.has("consoleToken")) CONSOLE_TOKEN = json.get("consoleToken").getAsString();
+        if (json.has("consoleBannedCommands")) CONSOLE_BANNED_COMMANDS = json.get("consoleBannedCommands").getAsString();
 
         if (json.has("qqGroup")) QQ_GROUP = json.get("qqGroup").getAsString();
         if (json.has("titleTemplate")) TITLE_TEMPLATE = json.get("titleTemplate").getAsString();
@@ -133,6 +139,8 @@ public class QQBindConfig {
             defaultJson.addProperty("enableWhitelistCheck", ENABLE_WHITELIST_CHECK);
             defaultJson.addProperty("dataFilePath", DATA_FILE_PATH);
             defaultJson.addProperty("serverId", SERVER_ID);
+            defaultJson.addProperty("consoleToken", CONSOLE_TOKEN);
+            defaultJson.addProperty("consoleBannedCommands", CONSOLE_BANNED_COMMANDS);
             defaultJson.addProperty("qqGroup", QQ_GROUP);
             defaultJson.addProperty("titleTemplate", TITLE_TEMPLATE);
             defaultJson.addProperty("subtitleTemplate", SUBTITLE_TEMPLATE);
@@ -161,6 +169,22 @@ public class QQBindConfig {
      */
     public static boolean isApiTokenUnsafe() {
         return API_TOKEN == null || API_TOKEN.isEmpty() || DEFAULT_API_TOKEN.equals(API_TOKEN);
+    }
+
+    /**
+     * 配置了 consoleToken 即启用 /api/console；留空表示不注册该接口
+     */
+    public static boolean isConsoleEnabled() {
+        return CONSOLE_TOKEN != null && !CONSOLE_TOKEN.isEmpty();
+    }
+
+    /**
+     * 已启用控制台接口但令牌强度不足（短于 16 位或仍是默认占位值）。
+     * 该接口等同服务器控制台，弱令牌一旦暴露后果远大于绑定接口。
+     */
+    public static boolean isConsoleTokenWeak() {
+        return isConsoleEnabled()
+                && (CONSOLE_TOKEN.length() < 16 || DEFAULT_API_TOKEN.equals(CONSOLE_TOKEN));
     }
 
     /**

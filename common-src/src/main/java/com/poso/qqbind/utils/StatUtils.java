@@ -1,8 +1,8 @@
 package com.poso.qqbind.utils;
 
+import com.poso.qqbind.core.PlayerStats;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.stats.Stats;
-import net.minecraft.resources.ResourceLocation;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,7 +29,7 @@ public class StatUtils {
         Map<String, Object> stats = buildStats(
                 player.getName().getString(),
                 player.getUUID().toString(),
-                statKey -> player.getStats().getValue(Stats.CUSTOM, statKey)
+                statKey -> PlayerStats.get(player, statKey)
         );
         stats.put("online", true);
         return stats;
@@ -44,7 +44,7 @@ public class StatUtils {
         Map<String, Object> stats = buildStats(
                 playerName,
                 uuid,
-                statKey -> customStats.getOrDefault(statKey.toString(), 0)
+                statKey -> customStats.getOrDefault(String.valueOf(statKey), 0)
         );
         stats.put("online", false);
         return stats;
@@ -52,8 +52,9 @@ public class StatUtils {
 
     /**
      * 公共构建逻辑，通过 Function 提供每个统计项的取值方式
+     * statKey 是原版统计常量对象，类型由调用方决定，此处只当不透明键传递
      */
-    public static Map<String, Object> buildStats(String playerName, String uuidStr, Function<ResourceLocation, Integer> provider) {
+    public static Map<String, Object> buildStats(String playerName, String uuidStr, Function<Object, Integer> provider) {
         Map<String, Object> stats = new HashMap<>();
 
         try {

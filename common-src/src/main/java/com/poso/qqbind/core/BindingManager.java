@@ -197,7 +197,7 @@ public class BindingManager {
                 for (ServerPlayer player : server.getPlayerList().getPlayers()) {
                     list.add(new Snapshot(player.getName().getString(),
                             PlayerStateManager.isRestricted(player),
-                            player.hasPermissions(4)));
+                            PlayerPermissions.isOperator(player)));
                 }
                 return list;
             });

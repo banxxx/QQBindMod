@@ -5,7 +5,9 @@ import com.poso.qqbind.api.WebServer;
 import com.poso.qqbind.api.holder.PlatformInfoHolder;
 import com.poso.qqbind.core.BindingManager;
 import com.poso.qqbind.core.TickTracker;
+import com.poso.qqbind.core.PlayerPermissions;
 import com.poso.qqbind.core.PlayerPing;
+import com.poso.qqbind.core.PlayerStats;
 import com.poso.qqbind.server.ServerProviderHolder;
 import com.poso.qqbind.storage.DataStorage;
 import com.poso.qqbind.storage.JsonStorage;
@@ -15,6 +17,8 @@ import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.stats.Stats;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,6 +39,12 @@ public class FabricModInitializer implements ModInitializer {
 
         // 延迟读取口：1.21.1 字段已移到 connection 上，用公开 getter
         PlayerPing.register(player -> player.connection.latency());
+
+        // 统计读取口：统计标识对象的类型随版本变，这里按本平台的类型收口
+        PlayerStats.register((player, statKey) -> player.getStats().getValue(Stats.CUSTOM, (ResourceLocation) statKey));
+
+        // 管理员判定读取口：本平台用权限等级 4
+        PlayerPermissions.register(player -> player.hasPermissions(4));
 
         // 2. 加载配置（若不存在则创建默认配置）
         QQBindConfig.load();

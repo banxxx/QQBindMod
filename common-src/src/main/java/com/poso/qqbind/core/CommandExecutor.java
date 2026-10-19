@@ -2,11 +2,13 @@ package com.poso.qqbind.core;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.ParseResults;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.poso.qqbind.server.ServerProviderHolder;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.rcon.RconConsoleSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,6 +69,43 @@ public class CommandExecutor {
                 LOGGER.error("Failed to execute command: {}", command, e);
             }
         });
+    }
+
+    /**
+     * 以控制台身份执行命令并回收其输出（供 /api/console 使用）。
+     *
+     * 复用原版 RCON 的命令源：它把命令输出写进自己的缓冲区，因此不需要开 RCON 端口，
+     * 命令权限也与原版控制台一致。原版实现是逐条 append 文本、不加换行，
+     * 这里补一个换行以保证多条消息能分行回显。
+     *
+     * @throws IllegalStateException 服务器不可用或主线程等待超时（超时不代表命令没执行）
+     */
+    public static CommandOutput executeWithOutput(String command, long timeoutMs) {
+        return MainThread.call(timeoutMs, server -> {
+            RconConsoleSource sink = new RconConsoleSource(server) {
+                @Override
+                public void sendSystemMessage(Component message) {
+                    super.sendSystemMessage(Component.literal(message.getString() + "\n"));
+                }
+            };
+            sink.prepareForCommand();
+            CommandDispatcher<CommandSourceStack> dispatcher = server.getCommands().getDispatcher();
+            CommandSourceStack source = sink.createCommandSourceStack();
+            int result = 0;
+            try {
+                result = dispatcher.execute(dispatcher.parse(command, source));
+            } catch (CommandSyntaxException e) {
+                sink.sendSystemMessage(Component.literal("命令解析失败: " + e.getMessage()));
+            }
+            LOGGER.info("Console command executed: {}", command);
+            return new CommandOutput(sink.getCommandResponse(), result);
+        });
+    }
+
+    /**
+     * 控制台命令的执行结果：原版缓冲区的原始输出 + Brigadier 的影响数。
+     */
+    public record CommandOutput(String response, int result) {
     }
 
     /**

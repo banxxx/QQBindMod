@@ -18,6 +18,8 @@ out/
 *.jar
 *.war
 *.ear
+.scratch
+/fabric-26.2
 
 run/
 runs/

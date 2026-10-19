@@ -20,6 +20,9 @@ public enum ErrorCode {
     MISSING_GAME_ID_OR_TOKEN(400, "缺少 gameId 或 token"),
     MISSING_QQ(400, "缺少 qq 参数"),
     MISSING_PLAYER_NAME(400, "缺少玩家名称"),
+    // 命令被策略拒绝。用 400 而不是 403：机器人端把 401/403 归类成"Token 不一致"，
+    // 403 会让"该命令已被禁用"显示成鉴权故障。
+    COMMAND_NOT_ALLOWED(400, "该命令不允许执行"),
 
     // 权限错误 (300-399)
     UNAUTHORIZED(401, "未授权，请提供有效的 Authorization 头"),

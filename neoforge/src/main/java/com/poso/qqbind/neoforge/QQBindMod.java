@@ -6,11 +6,15 @@ import com.poso.qqbind.api.WebServer;
 import com.poso.qqbind.api.holder.PlatformInfoHolder;
 import com.poso.qqbind.core.BindingManager;
 import com.poso.qqbind.core.PlayerActivityManager;
+import com.poso.qqbind.core.PlayerPermissions;
 import com.poso.qqbind.core.PlayerPing;
+import com.poso.qqbind.core.PlayerStats;
 import com.poso.qqbind.server.ServerProviderHolder;
 import com.poso.qqbind.storage.DataStorage;
 import com.poso.qqbind.storage.JsonStorage;
 import com.poso.qqbind.storage.RemoteStorage;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.stats.Stats;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.IEventBus;
@@ -54,6 +58,12 @@ public class QQBindMod {
 
         // 延迟读取口：1.21.1 字段已移到 connection 上，用公开 getter
         PlayerPing.register(player -> player.connection.latency());
+
+        // 统计读取口：统计标识对象的类型随版本变，这里按本平台的类型收口
+        PlayerStats.register((player, statKey) -> player.getStats().getValue(Stats.CUSTOM, (ResourceLocation) statKey));
+
+        // 管理员判定读取口：本平台用权限等级 4
+        PlayerPermissions.register(player -> player.hasPermissions(4));
 
         LOGGER.info("QQBindMod (NeoForge) initialized!");
     }

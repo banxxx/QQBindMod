@@ -65,8 +65,16 @@ public abstract class BaseHandler implements HttpHandler {
      * @return true 如果授权通过，否则已发送401响应并返回 false
      */
     protected boolean validateAuth(HttpExchange exchange) throws IOException {
+        return validateBearer(exchange, QQBindConfig.API_TOKEN);
+    }
+
+    /**
+     * 验证 Authorization 头是否携带指定的 Bearer 令牌
+     * （控制台接口用独立的 consoleToken，不与绑定接口共用）
+     */
+    protected boolean validateBearer(HttpExchange exchange, String token) throws IOException {
         String auth = exchange.getRequestHeaders().getFirst("Authorization");
-        String expected = "Bearer " + QQBindConfig.API_TOKEN;
+        String expected = "Bearer " + token;
         if (auth != null && auth.equals(expected)) {
             return true;
         }

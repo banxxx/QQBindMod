@@ -101,7 +101,10 @@ JAR 位于对应子项目的 `fabric/build/libs/qqbind-*-fabric-1.2*.1.jar` 下�
 ```json
 {
   "httpPort": 25566,
+  "httpBindHost": "127.0.0.1",
   "apiToken": "your-strong-random-token",
+  "consoleToken": "",
+  "consoleBannedCommands": "op",
   "enableWhitelistCheck": true,
   "dataFilePath": "qqbind/bindings.json",
   "serverId": "my-server",
@@ -135,6 +138,8 @@ JAR 位于对应子项目的 `fabric/build/libs/qqbind-*-fabric-1.2*.1.jar` 下�
 | dbApiUrl | string | 仅当模式非 local 时 | 远程数据库 API 的完整 URL（需实现文档中定义的协议）。 |
 | dbApiToken | string | 仅当模式非 local 时 | 用于验证远程 API 请求的 Bearer Token。 |
 | cacheTtlSeconds | integer | 否 | 内存缓存有效期（秒），默认 60 秒。 |
+| consoleToken | string | 否 | 控制台命令接口 `/api/console` 的独立 Bearer Token。留空即不注册该接口；填写但短于 16 位时模组拒绝启动 HTTP API。 |
+| consoleBannedCommands | string | 否 | 额外禁用的命令名（逗号分隔，不含参数），与代码内的永久硬禁清单叠加。 |
 
 重要提示：若要启用跨服数据共享，所有需要同步数据的服务器必须：
 - 使用相同的 dbApiUrl 和 dbApiToken
@@ -145,7 +150,7 @@ JAR 位于对应子项目的 `fabric/build/libs/qqbind-*-fabric-1.2*.1.jar` 下�
 
 ## API 文档
 
-所有接口需要 Authorization: Bearer <apiToken> 头（如已配置）。
+所有接口需要 Authorization: Bearer <apiToken> 头（如已配置）；`/api/console` 例外，使用独立的 `consoleToken`。
 
 | 端点 | 方法 | 说明 |
 |------|------|------|
@@ -158,6 +163,17 @@ JAR 位于对应子项目的 `fabric/build/libs/qqbind-*-fabric-1.2*.1.jar` 下�
 | /api/broadcast | POST | 广播消息（请求体：{"message":"Hello"}） |
 | /api/validate_token | GET | 验证绑定令牌（用于机器人端） |
 | /api/cache/invalidate | POST | 清除指定玩家的缓存（用于机器人端主动刷新） |
+| /api/console | POST | 以控制台身份执行命令并回显输出（请求体：{"command":"whitelist list","actor":"qq:123"}，需 `consoleToken`） |
+
+### /api/console 的使用前提
+
+该接口等同于服务器控制台，默认关闭：只有配置了 `consoleToken` 才会注册，且它不与 `apiToken` 共用密钥。
+
+- 只在可信网络内暴露：`httpBindHost` 用 `127.0.0.1` 或内网网卡地址，并由防火墙限制来源 IP；不要把它开放到公网。
+- 每台服务器用自己的 `consoleToken`，多服之间不必也不建议取同一个值：一台的配置文件外泄不会波及其它台。机器人端按服务器单独保存该密钥。
+- 永久硬禁（配置改不动）：`stop`、`restart`、`reload`、`deploy`、`ban`、`ban-ip`、`pardon`、`pardon-ip`、`schedule`。其余命令默认可执行，包括 `op`、`execute`、`function` 等——需要限制时用 `consoleBannedCommands` 追加。
+- 单次调用按来源 IP 限流 20 次/分钟；命令长度上限 200 字符，不支持一次提交多条命令。
+- 返回的 `output` 最多 30 行、单行最多 500 字符，疑似包含口令/种子的行会被替换为提示；`status` 为 `timeout` 时表示模组没能在限定时间内取回结果，命令可能已经执行，不要当作"已取消"。
 
 ---
 
