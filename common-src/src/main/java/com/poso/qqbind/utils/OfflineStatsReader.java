@@ -18,7 +18,7 @@ import java.util.*;
 
 /**
  * 离线玩家统计数据读取器
- * 从服务器的世界存档目录中读取 world/stats/<uuid>.json
+ * 从服务器世界存档里读取原版写出的玩家统计 JSON（位置随版本不同，由 LevelResource 给出）
  */
 public class OfflineStatsReader {
     private static final Logger LOGGER = LoggerFactory.getLogger(OfflineStatsReader.class);
@@ -36,8 +36,9 @@ public class OfflineStatsReader {
                 return null;
             }
 
-            // 2. 定位 stats 文件路径
-            Path statsDir = server.getWorldPath(LevelResource.ROOT).resolve("stats");
+            // 2. 定位 stats 文件路径。必须走 LevelResource 常量而不是拼 "stats"：
+            //    1.20.1/1.21.1 是 <世界>/stats，26.2 起原版挪成了 <世界>/players/stats。
+            Path statsDir = server.getWorldPath(LevelResource.PLAYER_STATS_DIR);
             Path statsFile = statsDir.resolve(uuid.toString() + ".json");
             if (!Files.exists(statsFile)) {
                 LOGGER.warn("玩家 {} 的统计文件不存在: {}", playerName, statsFile);

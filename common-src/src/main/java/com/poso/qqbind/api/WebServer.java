@@ -48,15 +48,20 @@ public class WebServer {
     }
 
     public void start() {
+        if (QQBindConfig.getLoadError() != null) {
+            LOGGER.error("配置文件未被成功解析，模组按内置默认值运行，HTTP API 不启动（绑定/解绑/查询/在线/TPS 等接口全部不可用）。"
+                    + "根因见上一条 QQBindConfig 的解析失败日志。");
+            return;
+        }
         if (QQBindConfig.isApiTokenUnsafe()) {
-            LOGGER.error("检测到 apiToken 仍为默认占位值，已拒绝启动 HTTP API（否则任何人可调用绑定/解绑/白名单接口）。"
+            LOGGER.error("配置文件里的 apiToken 缺失、为空或仍是默认占位值，已拒绝启动 HTTP API（否则任何人可调用绑定/解绑/白名单接口）。"
                     + "请在 config/qqbind/qqbind-config.json 中将 apiToken 设置为随机长字符串，并与 QQ 机器人插件保持一致后重启服务器。");
             return;
         }
         if (QQBindConfig.isConsoleTokenWeak()) {
             LOGGER.error("检测到 consoleToken 已设置但强度不足（短于 16 位或仍是占位值），已拒绝启动 HTTP API。"
                     + "控制台命令接口等同于服务器控制台权限，请改用随机长字符串后重启服务器；"
-                    + "若不需要该接口，将 consoleToken 置空即可。");
+                    + "若不需要该接口，将 consoleToken 置空即可——注意引号里哪怕只留一个空格也会被当成已设置。");
             return;
         }
         try {
@@ -78,6 +83,7 @@ public class WebServer {
             server.createContext("/api/validate_token", new ValidateTokenHandler());
             server.createContext("/api/cache/invalidate", new CacheInvalidateHandler());
             server.createContext("/api/sync_binding", new SyncBindingHandler());
+            server.createContext("/api/whitelist_check", new WhitelistCheckHandler());
             if (QQBindConfig.isConsoleEnabled()) {
                 server.createContext("/api/console", new ConsoleCommandHandler());
                 LOGGER.warn("已启用控制台命令接口 /api/console（等同于服务器控制台权限）。"
@@ -277,6 +283,8 @@ public class WebServer {
 
             // 存储与数据库连接状态（供机器人端展示降级提示）
             serverInfo.addProperty("storage_mode", QQBindConfig.STORAGE_MODE);
+            // 白名单校验开关当前值：机器人配置页要显示，读的是静态字段，不必进主线程快照
+            serverInfo.addProperty("whitelist_check_enabled", QQBindConfig.ENABLE_WHITELIST_CHECK);
             DataStorage storage = bindingManager.getStorage();
             if (storage instanceof RemoteStorage) {
                 serverInfo.addProperty("db_available", ((RemoteStorage) storage).isDbAvailable());
@@ -486,6 +494,66 @@ public class WebServer {
             data.addProperty("valid", true);
             data.addProperty("gameId", info.getGameId());
             data.addProperty("serverId", info.getServerId());
+            sendSuccess(exchange, data);
+        }
+    }
+
+    /**
+     * 白名单校验开关 - POST /api/whitelist_check
+     * 请求体: {"enabled": false}
+     *
+     * 各读取点（进服判定、在线重校验）都是即时读这个静态字段，所以改完即时生效，不需要重启。
+     * 同时写回配置文件，否则服务器下次重启会回到旧值。
+     * 关闭时必须顺手放开当前在线的受限玩家：负责解除限制的重校验本身也被这个开关拦着，
+     * 不顺手处理的话，玩家会停在「已经动不了」的状态，看上去就像开关没起作用。
+     */
+    private class WhitelistCheckHandler extends BaseHandler {
+        @Override
+        protected void doHandle(HttpExchange exchange) throws Exception {
+            if (!validateMethod(exchange, "POST")) return;
+            if (!validateAuth(exchange)) return;
+
+            String body = readRequestBody(exchange);
+            JsonObject json = body == null || body.isEmpty() ? null : gson.fromJson(body, JsonObject.class);
+            if (json == null || !json.has("enabled") || !json.get("enabled").isJsonPrimitive()) {
+                throw new InvalidParameterException("缺少 enabled 字段（true/false）");
+            }
+            boolean enabled = json.get("enabled").getAsBoolean();
+            boolean persisted = QQBindConfig.setWhitelistCheck(enabled);
+
+            int online = 0;
+            int released = 0;
+            try {
+                if (enabled) {
+                    // 打开：让在线玩家重新按绑定状态判定（未绑定的当场重新受限）
+                    bindingManager.revalidateOnlinePlayers();
+                    online = MainThread.call(3000, s -> s.getPlayerList().getPlayers().size());
+                } else {
+                    online = MainThread.call(3000, s -> {
+                        int n = 0;
+                        for (ServerPlayer player : s.getPlayerList().getPlayers()) {
+                            if (PlayerStateManager.isRestricted(player)) {
+                                PlayerStateManager.setRestricted(player, false);
+                                n++;
+                            }
+                        }
+                        return n;
+                    });
+                    released = online;
+                    online = MainThread.call(3000, s -> s.getPlayerList().getPlayers().size());
+                }
+            } catch (Exception e) {
+                // 开关本身已经改成功，玩家快照失败不该让整个请求失败
+                LOGGER.warn("白名单开关已切换，但在线玩家处理未完成: {}", e.getMessage());
+            }
+
+            JsonObject data = new JsonObject();
+            data.addProperty("enabled", enabled);
+            data.addProperty("persisted", persisted);
+            data.addProperty("online_players", online);
+            data.addProperty("released", released);
+            LOGGER.info("[whitelist_check] enabled={} persisted={} online={} released={}",
+                    enabled, persisted, online, released);
             sendSuccess(exchange, data);
         }
     }

@@ -9,9 +9,11 @@ import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.UUID;
 
 /**
@@ -63,23 +65,111 @@ public class QQBindConfig {
     /** 数据库最大重试次数，0 表示不限次数（到达上限后退避为低频探测） */
     public static int DB_MAX_RETRIES = 0;
 
+    /** 上一次 load() 的失败诊断文本；null 表示配置文件解析成功 */
+    private static String loadError = null;
+
     /**
      * 加载或创建配置文件
      */
     public static void load() {
         Path configPath = Paths.get(CONFIG_FILE);
+        loadError = null;
         if (!Files.exists(configPath)) {
             createDefaultConfig(configPath);
             return;
         }
 
-        try (Reader reader = Files.newBufferedReader(configPath, StandardCharsets.UTF_8)) {
-            JsonObject json = JsonParser.parseReader(reader).getAsJsonObject();
+        try {
+            String raw = Files.readString(configPath, StandardCharsets.UTF_8);
+            JsonObject json = JsonParser.parseString(raw).getAsJsonObject();
             applyConfig(json);
             LOGGER.info("Loaded configuration from {}", CONFIG_FILE);
         } catch (Exception e) {
-            LOGGER.error("Failed to load config, using defaults", e);
+            loadError = describeFailure(configPath, e);
+            LOGGER.error(loadError, e);
         }
+    }
+
+    /**
+     * 解析失败诊断文本（含文件路径、异常、可疑不可见字符的位置）；null = 上次解析成功
+     */
+    public static String getLoadError() {
+        return loadError;
+    }
+
+    /**
+     * 解析失败时把「看不见」的字符位置一起写出来：面板网页编辑器或聊天粘贴常把
+     * U+00A0/U+200B/U+FEFF/U+3000 混进缩进，光看 Gson 的行号指不到它，代价却是整份配置退回默认值。
+     */
+    private static String describeFailure(Path configPath, Exception e) {
+        StringBuilder msg = new StringBuilder();
+        msg.append("配置文件解析失败，本次启动所有配置项都退回模组内置默认值：")
+                .append("\n  文件：").append(configPath.toAbsolutePath())
+                .append("\n  异常：").append(e);
+        String suspects = locateInvisibleOutsideStrings(configPath);
+        if (suspects != null) {
+            msg.append("\n  可疑字符：").append(suspects)
+                    .append(" —— 这些不可见空白出现在 JSON 字符串之外，会被 JSON 解析拒绝");
+        }
+        msg.append("\n  连带后果：apiToken 退回占位值 → HTTP API 拒绝启动（绑定/在线/TPS 等接口全不可用）；")
+                .append("jdbcUrl 退回 <host> 占位 → 远程数据库连不上；enableWhitelistCheck 退回 true → 未绑定玩家会被拦在门外。")
+                .append("\n  处理：按上面的行/列删掉那行的行首空白后用键盘重打两个空格（别整段复制粘贴），")
+                .append("或删掉该文件让模组重新生成一份再逐项填回。");
+        return msg.toString();
+    }
+
+    /**
+     * 只扫 JSON 字符串字面量之外的位置，找不可见空白；字符串内的中文模板属正常内容，不上报。
+     */
+    private static String locateInvisibleOutsideStrings(Path configPath) {
+        String raw;
+        try {
+            raw = Files.readString(configPath, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            return null;
+        }
+        StringBuilder hits = new StringBuilder();
+        boolean inString = false;
+        boolean escaped = false;
+        int line = 1;
+        int column = 0;
+        int count = 0;
+        for (int i = 0; i < raw.length() && count < 5; i++) {
+            char c = raw.charAt(i);
+            column++;
+            if (c == '\n') {
+                line++;
+                column = 0;
+            }
+            if (inString) {
+                if (escaped) {
+                    escaped = false;
+                } else if (c == '\\') {
+                    escaped = true;
+                } else if (c == '"') {
+                    inString = false;
+                }
+                continue;
+            }
+            if (c == '"') {
+                inString = true;
+                continue;
+            }
+            if (isInvisibleSpace(c)) {
+                if (count > 0) {
+                    hits.append("、");
+                }
+                hits.append(String.format("U+%04X（行 %d 列 %d）", (int) c, line, column));
+                count++;
+            }
+        }
+        return count == 0 ? null : hits.toString();
+    }
+
+    /** Java 的 isWhitespace 不含 U+00A0/U+200B/U+FEFF，逐个点名后再兜住其余 Unicode 空白 */
+    private static boolean isInvisibleSpace(char c) {
+        return c == '\u00a0' || c == '\u200b' || c == '\ufeff' || c == '\u3000' || c == '\u2007' || c == '\u202f'
+                || (c > 0x7e && Character.isWhitespace(c));
     }
 
     /**
@@ -88,6 +178,48 @@ public class QQBindConfig {
     public static void reload() {
         load();
         LOGGER.info("Configuration reloaded");
+    }
+
+    /**
+     * 运行时切换「白名单校验」：内存立即生效，同时写回配置文件，
+     * 否则服务器下次重启会回到旧值，开关就成了只有本次有效的临时按钮。
+     *
+     * @return 配置文件是否写成功（内存值无论如何已经生效）
+     */
+    public static synchronized boolean setWhitelistCheck(boolean enabled) {
+        ENABLE_WHITELIST_CHECK = enabled;
+        return persistOne("enableWhitelistCheck", enabled);
+    }
+
+    /**
+     * 只改一个键的读改写：其它键原样保留，先写临时文件再原子替换，避免留下半截配置。
+     */
+    private static boolean persistOne(String key, boolean value) {
+        Path configPath = Paths.get(CONFIG_FILE);
+        try {
+            JsonObject json;
+            if (Files.exists(configPath)) {
+                try (Reader reader = Files.newBufferedReader(configPath, StandardCharsets.UTF_8)) {
+                    json = JsonParser.parseReader(reader).getAsJsonObject();
+                }
+            } else {
+                json = new JsonObject();
+            }
+            json.addProperty(key, value);
+
+            Files.createDirectories(configPath.getParent());
+            Path tmp = configPath.resolveSibling(configPath.getFileName() + ".tmp");
+            Files.writeString(tmp, GSON.toJson(json), StandardCharsets.UTF_8);
+            try {
+                Files.move(tmp, configPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(tmp, configPath, StandardCopyOption.REPLACE_EXISTING);
+            }
+            return true;
+        } catch (Exception e) {
+            LOGGER.error("Failed to persist config key {}", key, e);
+            return false;
+        }
     }
 
     /**
