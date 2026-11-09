@@ -14,6 +14,8 @@ import com.poso.qqbind.core.*;
 import com.poso.qqbind.server.ServerProviderHolder;
 import com.poso.qqbind.storage.DataStorage;
 import com.poso.qqbind.storage.RemoteStorage;
+import com.poso.qqbind.utils.StatUtils;
+import com.poso.qqbind.utils.StatsBulkReader;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import net.minecraft.network.chat.Component;
@@ -26,7 +28,9 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.OptionalDouble;
 import java.util.concurrent.Executors;
@@ -78,6 +82,7 @@ public class WebServer {
             server.createContext("/api/check", new CheckHandler());
             server.createContext("/api/status", new StatusHandler());
             server.createContext("/api/stats", new StatsHandler());
+            server.createContext("/api/stats/all", new StatsAllHandler());
             server.createContext("/api/tps", new TpsHandler());
             server.createContext("/api/broadcast", new BroadcastHandler());
             server.createContext("/api/validate_token", new ValidateTokenHandler());
@@ -93,6 +98,22 @@ public class WebServer {
             server.setExecutor(Executors.newCachedThreadPool());
             server.start();
             LOGGER.info("HTTP Server started on {}:{}", bindHost, port);
+
+            // 开服 60 秒后预热批量统计缓存：避开启动峰值，玩家第一次查榜单不用等全量扫描
+            Thread warmup = new Thread(() -> {
+                try {
+                    Thread.sleep(60_000L);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                MinecraftServer srv = ServerProviderHolder.get().getCurrentServer();
+                if (srv != null) {
+                    StatsBulkReader.warmUp(srv);
+                }
+            }, "QQBind-StatsWarmup");
+            warmup.setDaemon(true);
+            warmup.start();
         } catch (IOException e) {
             LOGGER.error("Failed to start HTTP server (check httpBindHost/httpPort config)", e);
         }
@@ -389,6 +410,40 @@ public class WebServer {
                 }
             }
             sendSuccess(exchange, response);
+        }
+    }
+
+    /**
+     * 全服批量统计处理器 - GET /api/stats/all?keys=play_time,deaths,mob_kills,fish_caught
+     * 排行榜用：一次取回全服玩家的累计值，排序与名次由插件侧计算。
+     */
+    private class StatsAllHandler extends BaseHandler {
+        @Override
+        protected void doHandle(HttpExchange exchange) throws Exception {
+            if (!validateMethod(exchange, "GET")) return;
+            if (!validateAuth(exchange)) return;
+
+            MinecraftServer server = ServerProviderHolder.get().getCurrentServer();
+            if (server == null) {
+                throw new BusinessException(ErrorCode.SERVER_NOT_AVAILABLE);
+            }
+
+            String raw = getQueryParam(exchange.getRequestURI().getQuery(), "keys");
+            List<String> keys = new ArrayList<>();
+            if (raw == null || raw.isEmpty()) {
+                keys.addAll(StatUtils.RANK_STAT_KEYS.keySet());
+            } else {
+                for (String part : raw.split(",")) {
+                    String key = part.trim();
+                    if (StatUtils.RANK_STAT_KEYS.containsKey(key) && !keys.contains(key)) {
+                        keys.add(key);
+                    }
+                }
+                if (keys.isEmpty()) {
+                    throw new InvalidParameterException("未知的统计项");
+                }
+            }
+            sendSuccess(exchange, StatsBulkReader.collect(server, keys));
         }
     }
 

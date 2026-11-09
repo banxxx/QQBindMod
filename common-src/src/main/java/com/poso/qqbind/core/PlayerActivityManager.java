@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -184,6 +185,19 @@ public class PlayerActivityManager {
             }
         }
         return null;
+    }
+
+    /**
+     * 复制一份当前活动记录，供批量统计读取 last_seen。
+     * 返回副本，避免调用方拿到并发修改中的对象。
+     */
+    public static Map<UUID, PlayerActivity> snapshotAll() {
+        Map<UUID, PlayerActivity> copy = new HashMap<>(players.size());
+        for (Map.Entry<UUID, PlayerActivity> entry : players.entrySet()) {
+            PlayerActivity a = entry.getValue();
+            copy.put(entry.getKey(), new PlayerActivity(a.name, a.lastLogin, a.lastQuit));
+        }
+        return copy;
     }
 
     /**

@@ -6,7 +6,9 @@ import net.minecraft.stats.Stats;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -20,6 +22,21 @@ import java.util.function.Function;
  */
 public class StatUtils {
     private static final Logger LOGGER = LoggerFactory.getLogger(StatUtils.class);
+
+    /**
+     * 排行榜批量接口暴露的统计项：对外键名 → 原版 CUSTOM 统计常量。
+     * 新增榜单时在这里登记，插件侧按同名键消费。
+     */
+    public static final Map<String, Object> RANK_STAT_KEYS;
+
+    static {
+        Map<String, Object> keys = new LinkedHashMap<>();
+        keys.put("play_time", Stats.PLAY_TIME);
+        keys.put("deaths", Stats.DEATHS);
+        keys.put("mob_kills", Stats.MOB_KILLS);
+        keys.put("fish_caught", Stats.FISH_CAUGHT);
+        RANK_STAT_KEYS = Collections.unmodifiableMap(keys);
+    }
 
     /**
      * 从在线玩家对象获取统计数据
