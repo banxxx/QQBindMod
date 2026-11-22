@@ -7,9 +7,12 @@ import com.poso.qqbind.server.ServerProviderHolder;
 import com.poso.qqbind.storage.DataStorage;
 import java.nio.file.Path;
 import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /** Native host assembly shared by all four loaders. Legacy storage stays lazy. */
 public final class BindingBootstrap {
+    private static final Logger LOGGER = LoggerFactory.getLogger(BindingBootstrap.class);
     private static volatile OfficialRuntimeSession official;
     private static volatile BindingManager legacy;
     private static boolean started;
@@ -45,6 +48,16 @@ public final class BindingBootstrap {
                     output.set(result); return result.get("state").getAsString();
                 }
                 public JsonObject takeOutput() { JsonObject value=output.get(); output.remove(); return value; }
+            });
+            official.whitelistToggle(enabled -> {
+                try {
+                    return MainThread.call(3000, server -> PlayerStateManager.revalidateOfficialWhitelist(enabled));
+                } catch (Exception error) {
+                    // The switch is already durable; an online snapshot failure must not
+                    // make the HTTP caller retry a successful configuration change.
+                    LOGGER.warn("官方登录限制已切换，但在线玩家重校验未完成: {}", error.getMessage());
+                    return new int[]{0,0};
+                }
             });
             status=settings.createFresh() ? "official_initialized_restart_required" : "official_core_only";
         } catch (OfficialException e) { status="official_blocked_" + e.code(); }

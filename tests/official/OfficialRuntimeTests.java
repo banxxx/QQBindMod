@@ -115,7 +115,9 @@ public final class OfficialRuntimeTests {
             var registry=new OfficialRuntimeRegistry(); var settings=selected(registry,json); Path root=Files.createTempDirectory("official-runtime-missing-synthetic-");
             expect("STORAGE_ERROR",() -> new OfficialRuntimeSession(registry,settings,root,OfficialRuntimeTests::forbiddenDriver,() -> false)); check(!Files.exists(root.resolve(settings.stateDirectory())));
             var remote=new OfficialRuntimeRegistry(); json=config(); json.addProperty("storageMode","remote"); var unsupported=selected(remote,json); Path other=Files.createTempDirectory("official-runtime-remote-synthetic-");
-            expect("NOT_SUPPORTED",() -> new OfficialRuntimeSession(remote,unsupported,other,OfficialRuntimeTests::forbiddenDriver,() -> false)); check(!Files.exists(other.resolve(unsupported.stateDirectory())));
+            // remote 已接通中心库+本地持久镜像；没有显式 fresh 时缺主文件只能报 STORAGE_ERROR，
+            // 不能悄悄新建状态，更不能回退到旧 OneBot 存储。
+            expect("STORAGE_ERROR",() -> new OfficialRuntimeSession(remote,unsupported,other,OfficialRuntimeTests::forbiddenDriver,() -> false)); check(!Files.exists(other.resolve(unsupported.stateDirectory())));
         });
         test("real_configuration_lease_authorizes_sync_and_fast_check_without_driver",() -> {
             var registry=new OfficialRuntimeRegistry(); var settings=selected(registry,config());
@@ -124,6 +126,30 @@ public final class OfficialRuntimeTests {
                 var result=session.dispatch("POST",OfficialMirrorAuthority.SYNC_PATH,request(),"Bearer " + TOKEN);
                 check(result.body().get("success").getAsBoolean() && session.isBoundFast("PLAYER_A"));
                 check(session.dispatch("GET","/api/v2/binding/capabilities",S.wire(),"Bearer " + TOKEN).body().get("code").getAsString().equals("NOT_SUPPORTED"));
+            }
+        });
+        test("official_live_whitelist_setting_is_scoped_typed_and_persisted",() -> {
+            var registry=new OfficialRuntimeRegistry(); var settings=selected(registry,config());
+            try (var session=new OfficialRuntimeSession(registry,settings,root(),OfficialRuntimeTests::forbiddenDriver,() -> false)) {
+                AtomicReference<Boolean> applied=new AtomicReference<>();
+                session.whitelistToggle(enabled -> { applied.set(enabled); return new int[]{3,1}; });
+                JsonObject body=S.wire(); body.addProperty("enabled",false);
+                var reply=session.dispatch("POST","/api/v2/binding/settings/whitelist",body,"Bearer " + TOKEN);
+                check(reply.status() == 200 && reply.body().get("success").getAsBoolean());
+                JsonObject data=reply.body().getAsJsonObject("data");
+                check(!data.get("enabled").getAsBoolean() && data.get("persisted").getAsBoolean());
+                check(data.get("online_players").getAsInt() == 3 && data.get("released").getAsInt() == 1);
+                check(Boolean.FALSE.equals(applied.get()) && !settings.whitelistCheck());
+                JsonObject saved=OfficialModState.parse(Files.readString(Path.of("config/qqbind/qqbind-config.json"))).getAsJsonObject();
+                check(!saved.get("enableWhitelistCheck").getAsBoolean());
+                JsonObject wrong=S.wire(); wrong.addProperty("group_id","SYNTHETIC_OTHER_GROUP"); wrong.addProperty("enabled",true);
+                expect("SCOPE_MISMATCH",() -> session.dispatch("POST","/api/v2/binding/settings/whitelist",wrong,"Bearer " + TOKEN));
+                JsonObject extra=S.wire(); extra.addProperty("enabled",true); extra.addProperty("operation_id",OP);
+                expect("INVALID_INPUT",() -> session.dispatch("POST","/api/v2/binding/settings/whitelist",extra,"Bearer " + TOKEN));
+                JsonObject text=S.wire(); text.addProperty("enabled","true");
+                expect("INVALID_INPUT",() -> session.dispatch("POST","/api/v2/binding/settings/whitelist",text,"Bearer " + TOKEN));
+                expect("UNAUTHORIZED",() -> session.dispatch("POST","/api/v2/binding/settings/whitelist",body,"Bearer wrong"));
+                check(!settings.whitelistCheck() && Boolean.FALSE.equals(applied.get()));
             }
         });
         test("snapshot_uses_actual_configuration_lease_and_explicit_fake_driver",() -> {

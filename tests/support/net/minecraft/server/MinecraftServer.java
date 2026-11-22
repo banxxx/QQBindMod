@@ -28,6 +28,7 @@ public final class MinecraftServer {
     public static final class PlayerList {
         private final Map<UUID, ServerPlayer> players = new HashMap<>();
         public ServerPlayer getPlayer(UUID id) { return players.get(id); }
+        public java.util.List<ServerPlayer> getPlayers() { return java.util.List.copyOf(players.values()); }
         public ServerPlayer getPlayerByName(String gameId) {
             return players.values().stream().filter(player -> player.getScoreboardName().equalsIgnoreCase(gameId)).findFirst().orElse(null);
         }

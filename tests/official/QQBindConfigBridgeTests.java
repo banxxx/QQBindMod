@@ -48,7 +48,7 @@ public final class QQBindConfigBridgeTests {
                 check(QQBindConfig.getLoadError() == null && QQBindConfig.isOfficialBindingSelected() && !QQBindConfig.isLegacyBindingEnabled());
                 var settings=OfficialRuntimeSettings.parse(document); try (var state=new OfficialModState(cwd.resolve(settings.stateDirectory()),settings.scope(),true)) { }
                 check(BindingBootstrap.start(() -> { throw new AssertionError("Legacy storage supplier must stay untouched"); }) == null);
-                check(BindingBootstrap.status().equals("official_core_only") && com.mysql.cj.jdbc.Driver.created == 0 && com.poso.qqbind.core.BindingManager.created == 0);
+                check(BindingBootstrap.status().startsWith("official_core_only") && com.mysql.cj.jdbc.Driver.created == 0 && com.poso.qqbind.core.BindingManager.created == 0);
             });
             test("v2_http_uses_native_bootstrap_and_real_session_without_driver",() -> {
                 var handler=new OfficialHttpHandler(BindingBootstrap::authorizeOfficialHttp,BindingBootstrap::dispatchOfficialHttp);
@@ -96,7 +96,7 @@ public final class QQBindConfigBridgeTests {
             var settings = OfficialRuntimeSettings.parse(document);
             try (var state = new OfficialModState(cwd.resolve(settings.stateDirectory()), settings.scope(), true)) { }
             check(BindingBootstrap.start(() -> { throw new AssertionError("Unexpected legacy storage"); }) == null);
-            check(BindingBootstrap.status().equals("official_core_only"));
+            check(BindingBootstrap.status().startsWith("official_core_only"));
             OfficialGameHostTests.run();
             check(com.mysql.cj.jdbc.Driver.created > 0);
         } else throw new IllegalArgumentException("Known synthetic scenario required");

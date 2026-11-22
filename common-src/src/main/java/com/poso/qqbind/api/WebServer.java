@@ -309,6 +309,8 @@ public class WebServer {
             serverInfo.addProperty("storage_mode", QQBindConfig.STORAGE_MODE);
             // 白名单校验开关当前值：机器人配置页要显示，读的是静态字段，不必进主线程快照
             serverInfo.addProperty("whitelist_check_enabled", QQBindConfig.ENABLE_WHITELIST_CHECK);
+            // 新版本才提供官方 V2 在线写入口；旧模组没有该字段，插件据此退回只读。
+            serverInfo.addProperty("whitelist_check_writable", true);
             DataStorage storage = bindingManager == null ? null : bindingManager.getStorage();
             if (QQBindConfig.isOfficialBindingSelected()) {
                 serverInfo.addProperty("storage_type", "qq_official");

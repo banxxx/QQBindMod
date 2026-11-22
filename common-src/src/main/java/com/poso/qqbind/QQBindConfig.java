@@ -220,6 +220,18 @@ public class QQBindConfig {
     }
 
     /**
+     * QQ 官方 V2 的在线登录取值开关。调用方必须已经校验官方 Token 与作用域；
+     * 与旧 setWhitelistCheck 分开，避免官方运行期误走 OneBot 写入语义。
+     * 运行期快照由 OfficialRuntimeSession 同步更新。
+     *
+     * @return 配置文件是否写成功（内存值无论如何已经生效）
+     */
+    public static synchronized boolean applyOfficialWhitelistCheck(boolean enabled) {
+        ENABLE_WHITELIST_CHECK = enabled;
+        return persistOne("enableWhitelistCheck", enabled);
+    }
+
+    /**
      * 只改一个键的读改写：其它键原样保留，先写临时文件再原子替换，避免留下半截配置。
      */
     private static boolean persistOne(String key, boolean value) {

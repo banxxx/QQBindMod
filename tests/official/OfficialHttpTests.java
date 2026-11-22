@@ -162,6 +162,14 @@ public final class OfficialHttpTests {
             invalid(get("/operations/"+OP+"/extra"),"INVALID_INPUT",400);
             invalid(new Exchange("POST","http://example.invalid"+PREFIX+"/sync","{}"),"INVALID_INPUT",400);
         });
+        test("official_live_whitelist_setting_is_a_post_only_v2_route",() -> {
+            Probe probe=new Probe(); JsonObject body=S.wire(); body.addProperty("enabled",false);
+            run(probe.handler,post("/settings/whitelist",body.toString()),"NOT_SUPPORTED",400);
+            check(probe.calls == 1 && probe.method.equals("POST") && probe.path.equals(PREFIX+"/settings/whitelist"));
+            JsonObject input=new JsonObject(); input.addProperty("enabled",false);
+            check(probe.input.get("enabled").isJsonPrimitive() && !probe.input.get("enabled").getAsBoolean());
+            invalid(get("/settings/whitelist"),"NOT_SUPPORTED",400);
+        });
         test("unexpected_failure_after_mutation_dispatch_is_unknown_and_not_replayed",() -> {
             Probe probe=new Probe(); probe.before=() -> { throw new IllegalStateException("SYNTHETIC_PRIVATE_FAILURE"); };
             run(probe.handler,post("/sync","{}"),"RESULT_UNKNOWN",202); check(probe.calls == 1);
@@ -230,12 +238,13 @@ public final class OfficialHttpTests {
                 run(new OfficialHttpHandler(session::authorizeHttp,session::dispatch),post("/sync",OfficialRuntimeTests.request().toString()),"UNAUTHORIZED",401); check(!session.isBoundFast("Player_A"));
             }
         });
-        test("http_registration_does_not_open_unwired_bind_unbind_or_check",() -> {
+        test("http_registration_keeps_unwired_bind_unbind_closed_and_check_needs_a_selector",() -> {
             var registry=new OfficialRuntimeRegistry(); var settings=OfficialRuntimeTests.selected(registry,OfficialRuntimeTests.config());
             try (var session=new OfficialRuntimeSession(registry,settings,OfficialRuntimeTests.root(),OfficialRuntimeTests::forbiddenDriver,() -> false)) {
                 var handler=new OfficialHttpHandler(session::authorizeHttp,session::dispatch);
                 for (String path : List.of("/bind","/unbind")) run(handler,post(path,S.wire().toString()),"NOT_SUPPORTED",400);
-                run(handler,get("/check"),"NOT_SUPPORTED",400); check(!session.isBoundFast("Player_A"));
+                // V2 /check 已接通，但必须带 game_id 或 user_id；空选择器不能当全量查询。
+                run(handler,get("/check"),"INVALID_INPUT",400); check(!session.isBoundFast("Player_A"));
             }
         });
         test("fresh_initialization_http_never_reads_body_or_opens_driver",() -> {

@@ -1,9 +1,13 @@
 package com.poso.qqbind.official;
 
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+import com.poso.qqbind.QQBindConfig;
 import java.nio.file.*;
 import java.sql.Driver;
+import java.util.HashSet;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.function.*;
@@ -43,6 +47,8 @@ public final class OfficialRuntimeSession implements AutoCloseable {
     private OfficialBindingApi bindings;
     private OfficialCommandService commands;
     private volatile OfficialCommandService.Executor commandExecutor=(action,payload,active) -> { throw new OfficialException("NOT_SUPPORTED"); };
+    /** Game-thread revalidation hook supplied by BindingBootstrap; returns {online,released}. */
+    private volatile Function<Boolean,int[]> whitelistToggle = enabled -> new int[]{0,0};
     public OfficialRuntimeSession(OfficialRuntimeRegistry registry,OfficialRuntimeSettings settings,Path root,
                                   Supplier<Driver> driver,BooleanSupplier onGameThread) {
         this(registry, settings, root, driver, onGameThread, notice -> { });
@@ -116,6 +122,9 @@ public final class OfficialRuntimeSession implements AutoCloseable {
     /** HTTP host passes the actual header, never an auth boolean. */
     public OfficialTokenApi.Reply dispatch(String method,String path,JsonObject request,String authorization) {
         if (onGameThread.getAsBoolean()) throw new OfficialException("NOT_SUPPORTED");
+        // This route mutates the live settings snapshot and must not run under a
+        // registry read lease (a write lock would deadlock the same thread).
+        if (path.equals("/api/v2/binding/settings/whitelist")) return dispatchWhitelist(request,authorization);
         try (var ignored=registry.acquire(this,settings.scope())) {
             if (path.equals("/api/v2/binding/command")) {
                 String action=OfficialModState.string(request,"action");
@@ -143,6 +152,37 @@ public final class OfficialRuntimeSession implements AutoCloseable {
             }
             return api.dispatch(method,path,request,true);
         }
+    }
+    /** Official-scoped live toggle; never touches legacy HTTP handlers. */
+    private OfficialTokenApi.Reply dispatchWhitelist(JsonObject request,String authorization) {
+        if (!active()) throw new OfficialException("NOT_SUPPORTED");
+        if (request == null || !settings.authenticates(authorization)) throw new OfficialException("UNAUTHORIZED");
+        JsonElement version=request.get("protocol_version");
+        if (version == null || !version.isJsonPrimitive() || !version.getAsJsonPrimitive().isNumber()
+                || version.getAsInt() != 2) throw new OfficialException("NOT_SUPPORTED");
+        if (!settings.scope().wire().entrySet().stream().allMatch(e -> e.getValue().equals(request.get(e.getKey()))))
+            throw new OfficialException("SCOPE_MISMATCH");
+        Set<String> expected=new HashSet<>(settings.scope().wire().keySet()); expected.add("enabled");
+        if (!request.keySet().equals(expected)) throw new OfficialException("INVALID_INPUT");
+        JsonElement enabled=request.get("enabled");
+        if (enabled == null || !enabled.isJsonPrimitive() || !enabled.getAsJsonPrimitive().isBoolean())
+            throw new OfficialException("INVALID_INPUT");
+        boolean value=enabled.getAsBoolean();
+        settings.setWhitelistCheck(value);
+        boolean persisted=QQBindConfig.applyOfficialWhitelistCheck(value);
+        int online=0,released=0;
+        try { int[] counts=whitelistToggle.apply(value); online=counts[0]; released=counts[1]; }
+        catch (Exception ignored) {
+            // The switch itself is already durable; online snapshot failure must not
+            // turn a successful configuration change into a client-side retry.
+        }
+        JsonObject data=new JsonObject(); data.addProperty("protocol_version",2);
+        data.add("scope",settings.scope().wire()); data.addProperty("enabled",value);
+        data.addProperty("persisted",persisted); data.addProperty("online_players",online);
+        data.addProperty("released",released);
+        JsonObject body=new JsonObject(); body.addProperty("success",true); body.addProperty("code","OK");
+        body.addProperty("message","OK"); body.add("data",data);
+        return new OfficialTokenApi.Reply(200,body);
     }
     public void refreshSnapshotOnIo() {
         if (onGameThread.getAsBoolean()) throw new OfficialException("NOT_SUPPORTED");
@@ -267,6 +307,7 @@ public final class OfficialRuntimeSession implements AutoCloseable {
     /** Memory-only, no configuration lock or file/DB access on the game thread. */
     public boolean isBoundFast(String gameId) { return active() && mirror != null && mirror.isBoundFast(gameId); }
     public void commandExecutor(OfficialCommandService.Executor executor) { commandExecutor=Objects.requireNonNull(executor); }
+    public void whitelistToggle(Function<Boolean,int[]> handler) { whitelistToggle=Objects.requireNonNull(handler); }
     public boolean bindingReadyFast() {
         return active() && snapshotReady && whitelist!=null && "ready".equals(whitelistStatus()) && (local!=null || settings.allowCenterSync());
     }

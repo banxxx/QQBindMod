@@ -267,6 +267,35 @@ public class PlayerStateManager {
     }
 
     /**
+     * 官方模式在线切换登录限制后的重校验，必须在服务端主线程执行。
+     * 关闭时立即释放所有已记录的官方受限玩家；打开时只在绑定快照已就绪后
+     * 重新判定在线玩家，避免把“未知状态”误当成未绑定而全场踢成旁观者。
+     *
+     * @return {在线人数, 本次释放人数}
+     */
+    static int[] revalidateOfficialWhitelist(boolean enabled) {
+        MinecraftServer server = ServerProviderHolder.get().getCurrentServer();
+        if (server == null || !server.isSameThread()) throw new IllegalStateException("Game thread required");
+        int online = 0, released = 0;
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            online++;
+            if (!enabled) {
+                OfficialConnection entry = officialRestrictions.get(player.getUUID());
+                if (entry == null) continue;
+                try { restoreOfficialMode(player, entry); released++; }
+                catch (RuntimeException error) { LOGGER.warn("释放官方登录限制失败: {}", error.getMessage()); }
+                continue;
+            }
+            if (!BindingBootstrap.officialSnapshotReady()) continue;
+            boolean wasRestricted = officialRestrictions.containsKey(player.getUUID());
+            try { applyOfficialLogin(player); }
+            catch (RuntimeException error) { LOGGER.warn("重新校验官方登录限制失败: {}", error.getMessage()); }
+            if (wasRestricted && !officialRestrictions.containsKey(player.getUUID())) released++;
+        }
+        return new int[]{online, released};
+    }
+
+    /**
      * 设置玩家的受限状态。游戏模式切换排队到服务端主线程执行。
      * @param player   目标玩家
      * @param restricted true 表示限制，false 表示解除限制

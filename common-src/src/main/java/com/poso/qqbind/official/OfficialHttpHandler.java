@@ -17,7 +17,7 @@ public final class OfficialHttpHandler implements HttpHandler {
     public static final String PREFIX="/api/v2/binding";
     static final int MAX_BYTES=1024*1024, MAX_QUERY=8192;
     private static final Set<String> SCOPE=Set.of("protocol_version","environment_id","group_id","server_id");
-    private static final Set<String> POSTS=Set.of("/token/validate","/token/reserve","/token/finalize","/sync","/bind","/unbind","/command");
+    private static final Set<String> POSTS=Set.of("/token/validate","/token/reserve","/token/finalize","/sync","/bind","/unbind","/command","/settings/whitelist");
     private static final Set<String> ERRORS=Set.of("INVALID_INPUT","UNAUTHORIZED","NOT_SUPPORTED","SCOPE_MISMATCH","SCHEMA_MISMATCH",
         "DB_UNAVAILABLE","CONFLICT","RESULT_UNKNOWN","TOKEN_INVALID","STORAGE_ERROR","LIMIT_EXCEEDED");
     @FunctionalInterface public interface Authentication { void check(String authorization); }

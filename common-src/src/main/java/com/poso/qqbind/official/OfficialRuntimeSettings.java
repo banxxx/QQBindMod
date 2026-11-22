@@ -9,14 +9,16 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.util.*;
 
-/** Immutable, redacted runtime selection parsed ONLY from a supplied document.
+/** Redacted runtime selection parsed ONLY from a supplied document.
+ * Everything except the server-local live whitelist switch is immutable.
  * No file, environment, old JDBC URL or legacy identity lookup is performed.
  */
 public final class OfficialRuntimeSettings {
     private final boolean official;
     private final OfficialScope scope;
     private final String mode,revision,token;
-    private final boolean fresh,publish,whitelist;
+    private final boolean fresh,publish;
+    private volatile boolean whitelist;
     private final Properties database;
     private String consoleToken = "";
     private OfficialRuntimeSettings(boolean official,OfficialScope scope,String mode,String revision,String token,
@@ -82,6 +84,8 @@ public final class OfficialRuntimeSettings {
     public boolean createFresh() { return fresh; }
     public boolean allowCenterSync() { return publish; }
     public boolean whitelistCheck() { return whitelist; }
+    /** Live server-local switch. Caller authenticates the official scope first. */
+    void setWhitelistCheck(boolean enabled) { whitelist=enabled; }
     public Path stateDirectory() {
         try {
             String group=HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(scope().groupId().getBytes(StandardCharsets.UTF_8)));
