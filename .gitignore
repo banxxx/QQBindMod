@@ -20,6 +20,7 @@ out/
 *.ear
 .scratch
 /fabric-26.2
+/docs/*
 
 run/
 runs/

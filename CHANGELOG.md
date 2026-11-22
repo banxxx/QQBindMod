@@ -1,56 +1,79 @@
 # 更新记录
 
-## 未发布 — 2026-11-20（官方断库回执与成员检测只读支持，未测试）
+## 2.0.0 — 2026-11-22（QQ 官方机器人 V2 绑定）
+
+这是模组端的官方机器人兼容大版本。OneBot 绑定与现有命令入口保持不变；QQ 官方 V2 使用独立协议、存储和操作记录，不与旧绑定混用。
+
+### 本次更新
+
+- 新增 QQ 官方 V2 `/api/v2/binding/*` 接口：capabilities 能力握手、bind/check/unbind/sync/operations，固定 `environment_id + group_openid + server_id` 范围，协议版本 2。
+- 支持 `hybrid` / `remote` / `local` 三种存储模式；中心两表与操作日志、预占、镜像和副作用原子提交，断库或结果未知时不静默改写、不重放。
+- 新增中心 JDBC 适配、只读结构预检、固定主机连接、TLS/超时与权限校验；运行时不自动建表或修复结构。
+- 接入管理员解绑、list、operation retry/cancel 和原请求人显式恢复；新增原生白名单与 Profile/UUID 解析桥、游戏线程效果队列、在线限制与恢复。
+- 新增官方成员检测只读 `view=active_roster`、广播/控制台独立 consoleToken 与持久防重。
+- Fabric 1.20.1、Fabric 1.21.1、Forge 1.20.1、NeoForge 1.21.1 四个加载器完成正式接线；发布前需用当前 2.0.0 源码重新构建并核对最终 Jar。
+
+### 兼容性
+
+- OneBot 绑定、配置和现有数据保持兼容；升级不会自动迁移旧的 OneBot 数据到官方表。
+- QQ 官方需要配套插件 2.0.0；插件与模组版本不匹配时官方功能 fail-closed。
+- 真实 QQ / Minecraft / 数据库 / 浏览器验收仍需按配套插件交付文档执行。
+
+### 详细开发记录
+
+以下记录按时间倒序，已并入 2.0.0。
+
+#### 开发记录 — 2026-11-20（官方断库回执与成员检测只读支持，未测试）
 
 - 中心GET operations/{id}在BindingApi返回DB_UNAVAILABLE/RESULT_UNKNOWN/SCOPE_MISMATCH时受控查询原TokenApi的本服持久reservation；结构损坏/未授权不回退，本地回执不代表中心终态，不释放预占或授权新增/解绑。
 - check支持互斥view=active_roster，使用现有认证/范围和active分页结构；游标绑定模式/用户目标/limit，防止与本人查询混用。HTTP只读参数白名单同步增加view。
 - /api/status的binding_ready改为运行时内存状态；不替代capabilities的中心结构/读写核验。
 - 按用户要求不运行Java测试或四模块构建；旧开发Jar与SOURCE_HASHES未更新，不包含本轮修改。未启动真实MC/数据库/QQ或读取真实配置/凭据/记录。
 
-## 未发布 — 2026-11-19（管理员、完整新授权恢复、写命令及remote/local）
+#### 开发记录 — 2026-11-19（管理员、完整新授权恢复、写命令及remote/local）
 
 - 四模块原生管理员解绑/list/operation retry/cancel正式接入同一后台事务与来源门禁；权限/连接在游戏线程刷新、提交边界再次核对，原生管理员不能提交QQ用户绑定。
 - 官方V2能力按实际名单桥/镜像/结构权限检查；local单文件权威、预占终态/墓碑和镜像/版本副作用原子提交，本服operations/check/bind/unbind与显式新授权恢复可用，拒绝中心sync。remote统一中心两表/断库镜像策略，唯一worker每60秒预算刷新一致性快照。
 - 新增官方command受控路由，独立consoleToken、外发前持久DISPATCHED、未知不重发；控制台过滤输出只瞬时回送，不写API日志或状态文件。
 - 交付后统一简洁检查：一个小型Java本地多账号/撤销/重启/未决恢复/命令防重smoke与配套Python真实回执互通通过。四个正式模块完整build、适用依赖/重映射通过，Jar新类/Mixin/refmap/目标Java和源码散列核对完成。最新产物在build/qqofficial-development/2026-11-19-complete-development/。
 - Gradle宿主21；Forge和Fabric1.20.1产物仍Java17。Forge离线仅跳过FG无超时仓库HEAD前置探针，不关闭TLS；中间超时/构建锁和错误宿主失败均修复后才记成功。没有MC/QQ/真实SQL运行或用户配置/凭据/数据读取，不宣称实机验收。
-## 未发布 — 2026-11-19（四加载器与终态预占恢复）
+#### 开发记录 — 2026-11-19（四加载器与终态预占恢复）
 
 - Forge1.20.1/NeoForge1.21.1实际启动安装白名单宿主，分版本Authlib与四模块status/reconcile接入；Forge通过FG公共映射任务和Mixin processor生成refmap/Shadow映射，jar/jarJar均重混淆；NeoForge在TOML注册Mojmap Mixin配置。
 - 新增运行时本服RESERVED终态自动收尾，最多4项/批轮转/退避；未决或失联保留，COMMITTED消费，REJECTED/ABORTED作废，绝不后台提交或按重启释放。管理员reconcile只排队刷新和对账，不授予绑定权限。
 - 四个真实模块完整Gradle编译/依赖打包成功；开发包/SHA256/源码散列/说明见build/qqofficial-development/2026-11-19-four-loaders/。仅既有token26项关键回归，增强原重启场景，无新增用例；无真实MC/SQL/QQ或凭据读取，原生管理员解绑与完整未决授权处理、remote/local等仍待开发。
 
-## 未发布阶段记录 — 2026-11-19（Fabric原版白名单接线）
+#### 阶段记录 — 2026-11-19（Fabric原版白名单接线）
 
 - 新增common-native-src的StoredUserEntry/StoredUserList Mixin窄访问层，直接作用于vanilla登录使用的原名单对象；Fabric1.20.1/1.21.1的SERVER_STARTED安装宿主，现有运行时调度文件/游戏/ACK阶段。原生命令先协调再修改，旧宿主失效后禁止继续写入或ACK。
 - Profile使用本服接受的玩家/名单快照；认证模式缺失才在现有单worker调用分版本Authlib仓库。离线/代理模式不伪造UUID，缺失保留待确认；内存更新和最后ACK前再次复核。新增管理员 `/qqbind status`。
 - 两个Fabric模块分别完整Gradle构建及shadow/remap打包成功，成品资源与映射已核对，开发Jar/SHA256/说明位于build/qqofficial-development/2026-11-19-native-whitelist/。隔离构建不读真实gradle.properties/用户init/配置/记录，不启动游戏；仅既有关键回归，无新增用例。
 - Forge/NeoForge安装、管理员/完整预占恢复、remote/local及实际QQ/MC/SQL验收仍未完成，完整绑定门禁保持关闭。
 
-## 未发布阶段记录 — 2026-11-19（白名单文件协调器）
+#### 阶段记录 — 2026-11-19（白名单文件协调器）
 
-### 共享白名单队列
+##### 共享白名单队列
 
 - 新增共享OfficialWhitelistQueue分阶段模型：解析固定ticket、游戏线程更新内存候选、异步文件确认、按当前scope/revision/profile再次复核、逐项镜像ACK；每批最多4个，在线效果队列保持独立，旧账号/版本不会凭文件序号改变业务结果。
 - 新增18项队列测试；完整JDK17/21回归各256项、8组源码检查覆盖25文件、两版MC API共享代码类型检查通过。game memory与profile resolver为合成接口，不是正式Loader/游戏接线。
 - Profile/UserCache来源、原生名单内存桥/命令hook、管理员/预占完整恢复、remote/local及四Loader构建仍待完成；WHITELIST与binding_ready继续关闭。
 
-### 固定版本Profile API证据
+##### 固定版本Profile API证据
 
 - 对Authlib 4.0.43/6.0.54来源和两版MC public bytecode进行隔离审阅。GameProfileCache.get(String)缓存miss会同步调用ProfileRepository并修改/保存缓存；Yggdrasil查询同步分页、带重试/sleep，两版Agent/失败callback参数不同。不能直接将该路径接主线程或宣传有界可取消。
 - PlayerList仅公开返回原UserWhiteList实例，相关Map字段private。更安全的Profile来源与同一名单内存Access需先逐版本设计和试点；不得启用猜测反射或当作原版白名单已接。
 
-### 文件协调器前包记录
+##### 文件协调器前包记录
 
 - 新增独立OfficialWhitelistFile文件协调器：私有owner快照、显式缺失授权、严格uuid/name流式校验、单写锁/散列、fsync/原子替换及未知结果查询；31项文件测试在JDK17/21通过。
 - 这一文件层结果不代表本轮共享pipeline完成；public文件回调与原生名单安装仍未接Loader。早期238/JDK和7组记录是前包历史，当前累计结果见下段/开发记录。
 
-## 未发布阶段记录 — 2026-11-19（配套插件恢复页）
+#### 阶段记录 — 2026-11-19（配套插件恢复页）
 
 - 配套插件完成原操作WebUI列表/详情/中止/终态补偿和三个受控框架HTTP，Python346项隔离回归、离线Vue/类型检查/发布构建通过。后台不能代办未决提交或回滚终态，真实认证/浏览器验收仍待用户。
 - 本包模组只同步说明并核对两版公共MC白名单ABI，没有改Java/SQL、运行模组/Gradle或重跑既有207项。受控内存/保存桥、异步白名单/Profile、模组管理员/未决对账、remote/local和正式四模块仍未完成；capabilities与binding_ready保持关闭。最新边界见开发记录及插件契约v1.12附录T。
 
-## 未发布阶段记录 — 2026-11-19（前包）
+#### 阶段记录 — 2026-11-19（前包）
 
 - 配套插件续接：正式聊天入口、独立中心装配和终态补偿 worker 已接，Python 319 项隔离回归通过。模组本包仅同步说明，没有改 Java 或重跑既有模组测试。原版异步白名单、原生管理员授权/未决预占对账、remote/local、四正式模块和真实验收仍待完成；capabilities 与 binding_ready 不因插件接线而开放。最新边界见开发记录及插件契约 v1.11 附录 S，以下是模组前一包的实现记录。
 
@@ -59,7 +82,7 @@
 - 进入限制前记录绑定 scope/玩家 UUID/mode 的 HMAC 标记，当前 active revision 才能恢复；伪造标记不授权。初始快照失败只暂停未知账号取码，不阻断已持久镜像放行和本地在线待办；更换 API Token 后旧模式标记失效，须在用户维护流程核对。
 - 新增 7 项取码、7 项内存游戏宿主、3 项镜像和 1 项运行时断库重启用例；JDK 17/21 各 207 项执行与 7 组结构检查通过。Minecraft 1.20.1/1.21.1 公共 API 类型检查通过，新增独立安全脚本可重现；插件 Python 270 项通过。没有运行正式加载器/Gradle/真实 MC、DB 或 QQ；插件具体事件策略仅接到运行时工厂，正式绑定入口/中心依赖、白名单异步适配、完整恢复、remote/local 和实机验收仍未完成。
 
-### 前阶段记录（以下条目保留当时边界）
+##### 前阶段记录（以下条目保留当时边界）
 
 - 新增 OfficialHttpHandler，WebServer 注册 V2 后经实际 BindingBootstrap/Session 委托。正文前鉴权、来源租约内再验证、sync 显式发布权限；GET 查询/POST UTF-8 JSON、严格重复键/编码/长度/路径检查、1 MiB 请求/响应、8 KiB 查询与 8 个在途解析/分发限制；不重放丢失响应，不记录原请求/异常原文。
 - 新增 26 项内存 HTTP、3 项实际启动桥接执行用例和 1 组路由源码检查，Java 共 189 项执行及 6 组结构检查在 JDK 17/21 各通过；Python 263 项通过。没有真实 HttpServer/网络/DB/MC/Gradle，四加载器未构建；官方发码/策略/MC 动作/恢复 worker 未接，capabilities、bind/unbind/check 和插件 binding_ready 保持关闭。前端/SQL 模板未改，下一包接登录/退出取码 I/O 调度。
