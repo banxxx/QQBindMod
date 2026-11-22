@@ -107,6 +107,36 @@ public class CommandExecutor {
      */
     public record CommandOutput(String response, int result) {
     }
+    /** Official path deliberately bypasses legacy command/body/output logging. */
+    public static String executeOfficial(String action,String payload,java.util.function.BooleanSupplier active) {
+        return executeOfficialResult(action,payload,active).get("state").getAsString();
+    }
+    public static com.google.gson.JsonObject executeOfficialResult(String action,String payload,java.util.function.BooleanSupplier active) {
+        com.google.gson.JsonObject result=new com.google.gson.JsonObject();
+        if (action.equals("console") && (!com.poso.qqbind.QQBindConfig.isConsoleEnabled()
+                || ConsoleCommandPolicy.check(payload)!=ConsoleCommandPolicy.Verdict.OK)) { result.addProperty("state","REJECTED"); return result; }
+        String state=MainThread.call(8000,server -> {
+            if (!active.getAsBoolean()) return "REJECTED";
+            if (action.equals("broadcast")) {
+                server.getPlayerList().broadcastSystemMessage(Component.literal(payload),false); return "SUCCEEDED";
+            }
+            if (!action.equals("console") || !com.poso.qqbind.QQBindConfig.isConsoleEnabled()
+                    || ConsoleCommandPolicy.check(payload)!=ConsoleCommandPolicy.Verdict.OK) return "REJECTED";
+            try {
+                var dispatcher=server.getCommands().getDispatcher();
+                RconConsoleSource sink=new RconConsoleSource(server) {
+                    @Override public void sendSystemMessage(Component message) { super.sendSystemMessage(Component.literal(message.getString()+"\n")); }
+                };
+                sink.prepareForCommand();
+                int affected=dispatcher.execute(dispatcher.parse(payload,sink.createCommandSourceStack()));
+                var formatted=ConsoleCommandPolicy.formatOutput(sink.getCommandResponse());
+                com.google.gson.JsonArray lines=new com.google.gson.JsonArray(); formatted.lines().forEach(lines::add);
+                result.add("output",lines); result.addProperty("result",affected); result.addProperty("truncated",formatted.truncated());
+                return "SUCCEEDED";
+            } catch (CommandSyntaxException e) { return "REJECTED"; }
+        });
+        result.addProperty("state",state); return result;
+    }
 
     /**
      * 断开玩家连接并显示提示（使用 Component）

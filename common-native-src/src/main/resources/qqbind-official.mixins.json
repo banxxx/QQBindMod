@@ -1,0 +1,9 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.poso.qqbind.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "qqbind-official.refmap.json",
+  "mixins": ["StoredUserEntryMixin", "StoredUserListMixin"],
+  "injectors": {"defaultRequire": 1}
+}

@@ -8,7 +8,7 @@ package com.poso.qqbind.server;
  * @since 1.0
  */
 public class ServerProviderHolder {
-    private static IServerProvider provider;
+    private static volatile IServerProvider provider;
 
     public static void setProvider(IServerProvider provider) {
         ServerProviderHolder.provider = provider;

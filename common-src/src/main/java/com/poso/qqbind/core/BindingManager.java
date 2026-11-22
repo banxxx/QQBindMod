@@ -43,6 +43,7 @@ public class BindingManager {
     });
 
     public BindingManager(DataStorage storage) {
+        requireLegacy();
         this.storage = storage;
         // 注册恢复回调：DB 重连并补同步后，重校验在线玩家的限制状态
         if (storage instanceof RemoteStorage) {
@@ -57,6 +58,7 @@ public class BindingManager {
      * 绑定 QQ 号与游戏 ID
      */
     public BindResult bind(String qq, String gameId) {
+        requireLegacy();
         if (!GameIdValidator.isValid(gameId)) {
             LOGGER.warn("拒绝绑定：gameId 非法：{}", gameId);
             return new BindResult(false, "游戏ID不合法（仅允许字母、数字、下划线，长度1-16）");
@@ -149,6 +151,7 @@ public class BindingManager {
      * 仅更新本地镜像与缓存，不写数据库；RemoteStorage 降级期间也能实时生效。
      */
     public void applySyncedBinding(String qq, String gameId) {
+        requireLegacy();
         if (!GameIdValidator.isValid(gameId)) {
             LOGGER.warn("拒绝同步绑定：gameId 非法：{}", gameId);
             return;
@@ -166,6 +169,7 @@ public class BindingManager {
      * 下行同步解绑（插件已从中心库删除时调用）：仅删本地镜像与缓存。
      */
     public void applySyncedUnbind(String gameId) {
+        requireLegacy();
         if (!GameIdValidator.isValid(gameId)) {
             LOGGER.warn("拒绝同步解绑：gameId 非法：{}", gameId);
             return;
@@ -186,6 +190,7 @@ public class BindingManager {
      * 保证 DB 查询不进主线程、玩家对象只在主线程访问。
      */
     public void revalidateOnlinePlayers() {
+        requireLegacy();
         // 与 JOIN 处理一致：关闭绑定检查时不得对玩家施加/恢复限制
         if (!QQBindConfig.ENABLE_WHITELIST_CHECK) {
             return;
@@ -257,6 +262,7 @@ public class BindingManager {
     }
 
     public DataStorage getStorage() {
+        requireLegacy();
         return storage;
     }
 
@@ -264,6 +270,7 @@ public class BindingManager {
      * 通过游戏 ID 解绑
      */
     public boolean unbindByGameId(String gameId) {
+        requireLegacy();
         if (!GameIdValidator.isValid(gameId)) {
             LOGGER.warn("拒绝解绑：gameId 非法：{}", gameId);
             return false;
@@ -289,6 +296,7 @@ public class BindingManager {
      * 通过 QQ 号解绑
      */
     public boolean unbindByQQ(String qq) {
+        requireLegacy();
         String gameId = storage.getGameId(qq);
         if (gameId == null) {
             return false;
@@ -311,6 +319,7 @@ public class BindingManager {
      * 只允许在后台线程调用（HTTP 线程、健康检查线程），不得在主线程使用。
      */
     public boolean isBound(String gameId) {
+        requireLegacy();
         LOGGER.info("isBound({}) = {}", gameId, storage.getQQ(gameId) != null);
         return storage.getQQ(gameId) != null;
     }
@@ -320,6 +329,7 @@ public class BindingManager {
      * 不会阻塞 server tick。结果可能因缓存未热而滞后，配合 {@link #verifyBindingAsync(String)}。
      */
     public boolean isBoundFast(String gameId) {
+        if (!QQBindConfig.isLegacyBindingEnabled()) return false;
         return storage.getQQNonBlocking(gameId) != null;
     }
 
@@ -329,6 +339,7 @@ public class BindingManager {
      * DB 抖动时最多占用一个后台线程，不影响主线程。
      */
     public void verifyBindingAsync(String gameId) {
+        requireLegacy();
         ioExecutor.execute(() -> {
             try {
                 if (isBound(gameId)) {
@@ -344,6 +355,7 @@ public class BindingManager {
      * 获取游戏 ID 绑定的 QQ 号
      */
     public String getQQ(String gameId) {
+        requireLegacy();
         return storage.getQQ(gameId);
     }
 
@@ -351,6 +363,7 @@ public class BindingManager {
      * 通过 QQ 号获取绑定的游戏 ID
      */
     public String getGameIdByQQ(String qq) {
+        requireLegacy();
         return storage.getGameId(qq);
     }
 
@@ -358,6 +371,7 @@ public class BindingManager {
      * 获取所有绑定数据
      */
     public Map<String, String> getAllBindings() {
+        requireLegacy();
         return storage.getAll();
     }
 
@@ -366,6 +380,7 @@ public class BindingManager {
      * 必须放到后台线程执行，不能在命令所在的主线程直接调用。
      */
     public void reload() {
+        requireLegacy();
         ioExecutor.execute(() -> {
             try {
                 storage.load();
@@ -384,5 +399,9 @@ public class BindingManager {
             this.success = success;
             this.message = message;
         }
+    }
+
+    private static void requireLegacy() {
+        if (!QQBindConfig.isLegacyBindingEnabled()) throw new IllegalStateException("Legacy binding is disabled for this platform");
     }
 }

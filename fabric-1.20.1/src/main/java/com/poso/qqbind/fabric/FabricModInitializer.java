@@ -4,6 +4,7 @@ import com.poso.qqbind.QQBindConfig;
 import com.poso.qqbind.api.WebServer;
 import com.poso.qqbind.api.holder.PlatformInfoHolder;
 import com.poso.qqbind.core.BindingManager;
+import com.poso.qqbind.core.BindingBootstrap;
 import com.poso.qqbind.core.TickTracker;
 import com.poso.qqbind.core.PlayerPermissions;
 import com.poso.qqbind.core.PlayerPing;
@@ -57,17 +58,19 @@ public class FabricModInitializer implements ModInitializer {
         }
         // 4. 初始化存储和绑定管理器
         // 根据配置选择存储实现
-        DataStorage storage;
-        String mode = QQBindConfig.STORAGE_MODE;
-        if ("remote".equalsIgnoreCase(mode) || "hybrid".equalsIgnoreCase(mode)) {
-            storage = new RemoteStorage();
-            LOGGER.info("Using RemoteStorage (mode: {})", mode);
-        } else {
-            storage = new JsonStorage();
-            LOGGER.info("Using local JsonStorage");
-        }
+        bindingManager = BindingBootstrap.start(() -> {
+            DataStorage storage;
+            String mode = QQBindConfig.STORAGE_MODE;
+            if ("remote".equalsIgnoreCase(mode) || "hybrid".equalsIgnoreCase(mode)) {
+                storage = new RemoteStorage();
+                LOGGER.info("Using RemoteStorage (mode: {})", mode);
+            } else {
+                storage = new JsonStorage();
+                LOGGER.info("Using local JsonStorage");
+            }
 
-        bindingManager = new BindingManager(storage);
+            return storage;
+        });
 
         // 5. 启动 HTTP API 服务
         webServer = new WebServer(bindingManager);
@@ -82,7 +85,10 @@ public class FabricModInitializer implements ModInitializer {
 
         // 6b. 自测 tick 环：TPS/mspt 由模组自己计时，不再反射原版字段（反射名在生产环境已被改名）
         ServerTickEvents.START_SERVER_TICK.register(server -> TickTracker.onTickStart());
-        ServerTickEvents.END_SERVER_TICK.register(server -> TickTracker.onTickEnd());
+        ServerTickEvents.END_SERVER_TICK.register(server -> {
+            TickTracker.onTickEnd();
+            BindingBootstrap.tickOfficial();
+        });
 
         // 7. 注册命令
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
@@ -94,6 +100,10 @@ public class FabricModInitializer implements ModInitializer {
         // 9. 监听服务器启动事件，将服务器实例缓存到 FabricServerProvider
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             FabricServerProvider.setServer(server);
+            try { FabricOfficialWhitelist.install(server); }
+            catch (com.poso.qqbind.official.OfficialException error) {
+                LOGGER.warn("Official whitelist bridge unavailable: {}",error.code());
+            }
             TickTracker.reset();
             LOGGER.info("Fabric server instance cached.");
         });
@@ -117,13 +127,12 @@ public class FabricModInitializer implements ModInitializer {
                 LOGGER.error("关闭 PlayerActivityManager 失败", e);
             }
 
-            if (bindingManager != null) {
-                bindingManager.close();
-            }
             if (webServer != null) {
                 webServer.stop();
                 LOGGER.info("HTTP server stopped");
             }
+            BindingBootstrap.stop();
+            bindingManager = null;
             // 清理缓存，避免内存泄漏
             FabricServerProvider.setServer(null);
         });

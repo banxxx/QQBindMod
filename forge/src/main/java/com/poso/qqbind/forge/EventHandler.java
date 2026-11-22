@@ -3,6 +3,7 @@ package com.poso.qqbind.forge;
 import com.mojang.logging.LogUtils;
 import com.poso.qqbind.QQBindConfig;
 import com.poso.qqbind.core.BindingManager;
+import com.poso.qqbind.core.BindingBootstrap;
 import com.poso.qqbind.core.PlayerActivityManager;
 import com.poso.qqbind.core.PlayerStateManager;
 import com.poso.qqbind.core.TickTracker;
@@ -34,6 +35,7 @@ public class EventHandler {
             LOGGER.warn("记录玩家登录活动失败: {}", e.getMessage());
         }
         if (!QQBindConfig.ENABLE_WHITELIST_CHECK) return;
+        if (PlayerStateManager.handleRuntimeLogin(player)) return;
 
         String gameId = player.getScoreboardName();
         BindingManager bindingManager = QQBindMod.getBindingManager();
@@ -63,12 +65,12 @@ public class EventHandler {
     @SubscribeEvent
     public void onPlayerLogout(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer player) {
+            PlayerStateManager.removePlayer(player);
             try {
                 PlayerActivityManager.onPlayerLogout(player.getUUID(), player.getScoreboardName());
             } catch (Exception e) {
                 LOGGER.warn("记录玩家退出活动失败: {}", e.getMessage());
             }
-            PlayerStateManager.removePlayer(player);
         }
     }
 
@@ -79,11 +81,16 @@ public class EventHandler {
             TickTracker.onTickStart();
         } else {
             TickTracker.onTickEnd();
+            BindingBootstrap.tickOfficial();
         }
     }
 
     @SubscribeEvent
     public void onServerStarted(ServerStartedEvent event) {
+        try { ForgeOfficialWhitelist.install(event.getServer()); }
+        catch (com.poso.qqbind.official.OfficialException error) {
+            LOGGER.warn("Official whitelist bridge unavailable: {}",error.code());
+        }
         TickTracker.reset();
     }
 }

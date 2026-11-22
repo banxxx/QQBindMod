@@ -30,6 +30,7 @@ public class TokenManager {
     private static final Map<UUID, String> playerTokenCache = new ConcurrentHashMap<>();
 
     static {
+        if (QQBindConfig.isLegacyBindingEnabled()) {
         // 后台定时清理过期令牌与限流窗口，避免 map 无限增长
         ScheduledExecutorService cleaner = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "QQBind-TokenCleanup");
@@ -45,6 +46,7 @@ public class TokenManager {
                 LOGGER.warn("Token cleanup failed: {}", e.getMessage());
             }
         }, 30, 30, TimeUnit.SECONDS);
+        }
     }
 
     /**
@@ -87,6 +89,7 @@ public class TokenManager {
      * @return 令牌字符串
      */
     public static String getOrRefreshToken(ServerPlayer player) {
+        if (!QQBindConfig.isLegacyBindingEnabled()) return null;
         UUID uuid = player.getUUID();
         String existingToken = playerTokenCache.get(uuid);
         // 检查现有令牌是否仍有效
@@ -155,6 +158,7 @@ public class TokenManager {
      * @return 若有效返回 gameId，否则返回 null
      */
     public static String validateAndUseToken(String token, String qq) {
+        if (!QQBindConfig.isLegacyBindingEnabled()) return null;
         TokenInfo info = tokenMap.get(token);
         if (info == null) {
             LOGGER.warn("Token {} not found", token);
@@ -182,6 +186,7 @@ public class TokenManager {
      * 清理所有过期令牌（定期调用）
      */
     public static void cleanupExpiredTokens() {
+        if (!QQBindConfig.isLegacyBindingEnabled()) return;
         long now = System.currentTimeMillis();
         tokenMap.entrySet().removeIf(entry -> {
             TokenInfo info = entry.getValue();
@@ -198,6 +203,7 @@ public class TokenManager {
      * 获取玩家当前有效的令牌（可能返回 null）
      */
     public static String getCurrentToken(ServerPlayer player) {
+        if (!QQBindConfig.isLegacyBindingEnabled()) return null;
         return playerTokenCache.get(player.getUUID());
     }
 
@@ -205,6 +211,7 @@ public class TokenManager {
      * 强制移除玩家的令牌（用于玩家退出时清理）
      */
     public static void removeTokenForPlayer(ServerPlayer player) {
+        if (!QQBindConfig.isLegacyBindingEnabled()) return;
         invalidateToken(player);
     }
 
@@ -215,6 +222,7 @@ public class TokenManager {
      * @return 若有效则返回 TokenInfo（包含 gameId 和 serverId），否则返回 null
      */
     public static TokenInfo validateTokenOnly(String token) {
+        if (!QQBindConfig.isLegacyBindingEnabled()) return null;
         TokenInfo info = tokenMap.get(token);
         if (info == null) {
             return null;

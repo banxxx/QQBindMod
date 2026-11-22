@@ -4,16 +4,23 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.poso.qqbind.official.OfficialException;
+import com.poso.qqbind.official.OfficialRuntimeRegistry;
+import com.poso.qqbind.official.OfficialRuntimeSettings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
+import java.nio.file.LinkOption;
 import java.util.UUID;
 
 /**
@@ -29,6 +36,11 @@ public class QQBindConfig {
     private static final Logger LOGGER = LoggerFactory.getLogger(QQBindConfig.class);
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
     private static final String CONFIG_FILE = "config/qqbind/qqbind-config.json";
+    private static final OfficialRuntimeRegistry BINDING_RUNTIME = new OfficialRuntimeRegistry();
+
+    public static OfficialRuntimeRegistry bindingRuntime() { return BINDING_RUNTIME; }
+    public static boolean isLegacyBindingEnabled() { return BINDING_RUNTIME.legacyAllowed(); }
+    public static boolean isOfficialBindingSelected() { return BINDING_RUNTIME.officialSelected(); }
 
     // 配置字段（静态，全局可访问）
     public static int HTTP_PORT = 25566;
@@ -75,18 +87,33 @@ public class QQBindConfig {
         Path configPath = Paths.get(CONFIG_FILE);
         loadError = null;
         if (!Files.exists(configPath)) {
+            if (!BINDING_RUNTIME.canCreateDefault()
+                    || Files.exists(configPath.resolveSibling("official-selection.marker"),LinkOption.NOFOLLOW_LINKS)
+                    || Files.exists(Paths.get("qqbind","official"),LinkOption.NOFOLLOW_LINKS)) {
+                loadError="配置文件缺失，当前目标未改变；不自动重建配置，请在本机恢复后完整停启。";
+                LOGGER.error(loadError);
+                return;
+            }
             createDefaultConfig(configPath);
             return;
         }
 
         try {
+            if (Files.size(configPath) > 1024 * 1024) throw new OfficialException("INVALID_INPUT");
             String raw = Files.readString(configPath, StandardCharsets.UTF_8);
-            JsonObject json = JsonParser.parseString(raw).getAsJsonObject();
+            JsonObject json = OfficialRuntimeSettings.document(raw);
+            // Remember an explicit official selection even when another field
+            // is invalid; deleting that config must not enable old identities.
+            if (json.has("bindingPlatform") && json.get("bindingPlatform").isJsonPrimitive()
+                    && json.get("bindingPlatform").getAsJsonPrimitive().isString()
+                    && json.get("bindingPlatform").getAsString().equals("qq_official")) persistOfficialSelectionMarker();
             applyConfig(json);
             LOGGER.info("Loaded configuration from {}", CONFIG_FILE);
         } catch (Exception e) {
-            loadError = describeFailure(configPath, e);
-            LOGGER.error(loadError, e);
+            loadError = e instanceof OfficialException official && official.code().equals("RESTART_REQUIRED")
+                    ? "绑定平台或官方来源变更需要维护窗口完整停启，当前运行目标未改变。"
+                    : "配置未应用；请在本机检查配置后重试或完整停启，已验证的运行目标保持不变。";
+            LOGGER.error(loadError); // No parser excerpt, secret value, path or cause.
         }
     }
 
@@ -177,7 +204,7 @@ public class QQBindConfig {
      */
     public static void reload() {
         load();
-        LOGGER.info("Configuration reloaded");
+        if (loadError == null) LOGGER.info("Configuration reloaded");
     }
 
     /**
@@ -187,6 +214,7 @@ public class QQBindConfig {
      * @return 配置文件是否写成功（内存值无论如何已经生效）
      */
     public static synchronized boolean setWhitelistCheck(boolean enabled) {
+        if (!isLegacyBindingEnabled()) return false;
         ENABLE_WHITELIST_CHECK = enabled;
         return persistOne("enableWhitelistCheck", enabled);
     }
@@ -226,6 +254,40 @@ public class QQBindConfig {
      * 将 JSON 配置应用到静态字段
      */
     private static void applyConfig(JsonObject json) {
+        // Validate all old scalar conversions before publishing any static value.
+        for (String name : new String[]{"httpBindHost","apiToken","dataFilePath","serverId","consoleToken","consoleBannedCommands",
+                "qqGroup","titleTemplate","subtitleTemplate","actionBarTemplate","bindSuccessTitle","bindSuccessSubtitle",
+                "bindSuccessActionBar","storageMode","jdbcUrl","dbUser","dbPassword"}) {
+            if (json.has(name)) json.get(name).getAsString();
+        }
+        for (String name : new String[]{"httpPort","cacheTtlSeconds","dbRetryIntervalSeconds","dbMaxRetries"}) {
+            if (json.has(name)) json.get(name).getAsInt();
+        }
+        if (json.has("enableWhitelistCheck")) json.get("enableWhitelistCheck").getAsBoolean();
+        OfficialRuntimeSettings candidate=OfficialRuntimeSettings.parse(json);
+        BINDING_RUNTIME.apply(candidate,() -> {
+            if (candidate.official()) persistOfficialSelectionMarker();
+            applyLegacyFields(json);
+        });
+    }
+
+    /** Sticky refusal marker: missing config must not cold-boot back to OneBot.
+     * It contains no identity/credential and is never used as auth or read back.
+     */
+    private static void persistOfficialSelectionMarker() {
+        Path marker=Paths.get(CONFIG_FILE).resolveSibling("official-selection.marker");
+        if (Files.exists(marker,LinkOption.NOFOLLOW_LINKS)) return;
+        try {
+            Files.createDirectories(marker.getParent());
+            try (FileChannel channel=FileChannel.open(marker,StandardOpenOption.CREATE_NEW,StandardOpenOption.WRITE)) {
+                ByteBuffer buffer=ByteBuffer.wrap("qq_official\n".getBytes(StandardCharsets.US_ASCII));
+                while (buffer.hasRemaining()) channel.write(buffer);
+                channel.force(true);
+            }
+        } catch (Exception e) { throw new OfficialException("STORAGE_ERROR"); }
+    }
+
+    private static void applyLegacyFields(JsonObject json) {
         if (json.has("httpPort")) HTTP_PORT = json.get("httpPort").getAsInt();
         if (json.has("httpBindHost")) HTTP_BIND_HOST = json.get("httpBindHost").getAsString();
         if (json.has("apiToken")) API_TOKEN = json.get("apiToken").getAsString();
@@ -265,6 +327,7 @@ public class QQBindConfig {
             }
 
             JsonObject defaultJson = new JsonObject();
+            defaultJson.addProperty("bindingPlatform", "onebot");
             defaultJson.addProperty("httpPort", HTTP_PORT);
             defaultJson.addProperty("httpBindHost", HTTP_BIND_HOST);
             defaultJson.addProperty("apiToken", API_TOKEN);
@@ -290,9 +353,11 @@ public class QQBindConfig {
 
             String jsonStr = GSON.toJson(defaultJson);
             Files.writeString(configPath, jsonStr);
+            applyConfig(defaultJson);
             LOGGER.info("Created default config file at {}", CONFIG_FILE);
         } catch (Exception e) {
-            LOGGER.error("Failed to create default config", e);
+            loadError="默认配置创建失败，绑定入口未初始化。";
+            LOGGER.error(loadError);
         }
     }
 

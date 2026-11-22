@@ -32,6 +32,15 @@ crash-reports/
 
 config/qqbind/
 *.json
+# Only reviewed synthetic fixtures/templates; real configs and records stay ignored.
+!examples/qq-official-config.template.json
+!tests/fixtures/official_reservation_v2.json
+!tests/fixtures/official_mirror_v2.json
+!tests/fixtures/official_center_v1.json
+!common-native-src/src/main/resources/qqbind-official.mixins.json
+!neoforge/src/main/resources/qqbind-official-neoforge.mixins.json
+!fabric-1.20.1/src/main/resources/fabric.mod.json
+!fabric-1.21.1/src/main/resources/fabric.mod.json
 !src/main/templates/**/*.toml
 !src/main/resources/**/*.toml
 !common-src/**/*.json?
@@ -52,3 +61,18 @@ Thumbs.db
 *.bak
 *.swp
 *~
+
+# 本机开发过程记录及依赖当前电脑缓存/路径的隔离、打包工具。
+# 正式构建脚本、协议测试、测试替身与合成夹具仍入库。
+/QQ_OFFICIAL_DEVELOPMENT.md
+/tests/run-official-isolated.ps1
+/tests/run-native-types-isolated.ps1
+/tests/run-delivery-smoke-isolated.ps1
+/tests/official/NativeSourceParseTests.java
+/tests/delivery-wire-synthetic.json
+/delivery-wire-synthetic.json
+/tools/build-fabric-isolated.ps1
+/tools/build-loader-isolated.ps1
+/tools/resume-loader-isolated.ps1
+/tools/prepare-minecraft-metadata.ps1
+/tools/package-official-delivery.ps1

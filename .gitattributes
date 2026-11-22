@@ -1,0 +1,3 @@
+# 独立核心回归保留在 Git；发布源码归档不携带测试工具与夹具。
+/tests export-ignore
+/tests/** export-ignore

@@ -39,6 +39,10 @@ public abstract class BaseHandler implements HttpHandler {
     @Override
     public final void handle(HttpExchange exchange) {
         try {
+            if (!QQBindConfig.bindingRuntime().allowsLegacyHttp(exchange.getRequestMethod(),exchange.getRequestURI().getPath())) {
+                sendError(exchange,503,"Legacy binding and write endpoints are disabled for this platform");
+                return;
+            }
             doHandle(exchange);
         } catch (Exception e) {
             GlobalExceptionHandler.handleException(exchange, e);

@@ -16,10 +16,19 @@ sourceSets {
         java {
             srcDir 'src/main/java'
             srcDir '../common-src/src/main/java'
+            srcDir '../common-native-src/src/main/java'
         }
         resources {
             srcDir 'src/main/resources'
+            srcDir '../common-native-src/src/main/resources'
         }
+    }
+}
+
+loom {
+    mixin {
+        useLegacyMixinAp = true
+        defaultRefmapName = 'qqbind-official.refmap.json'
     }
 }
 

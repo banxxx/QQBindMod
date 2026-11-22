@@ -13,6 +13,7 @@ sourceSets {
         java {
             srcDir 'src/main/java'
             srcDir '../common-src/src/main/java'
+            srcDir '../common-native-src/src/main/java'
         }
     }
 }
@@ -74,7 +75,7 @@ configurations {
 
 dependencies {
     // JDBC 驱动 (MySQL Connector/J)
-    implementation 'mysql:mysql-connector-java:8.0.33'
+    implementation 'com.mysql:mysql-connector-j:8.0.33'
     // HikariCP 连接池
     implementation 'com.zaxxer:HikariCP:5.0.1'
     jarJar('com.mysql:mysql-connector-j:8.0.33') {

@@ -2,6 +2,9 @@ modLoader = "javafml"
 loaderVersion = "[4,)"
 license = "${mod_license}"
 
+[[mixins]]
+config = "qqbind-official-neoforge.mixins.json"
+
 [[mods]]
 modId = "qqbind"
 version = "${mod_version}"

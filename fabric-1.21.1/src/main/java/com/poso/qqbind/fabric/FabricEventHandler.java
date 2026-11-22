@@ -25,6 +25,7 @@ public class FabricEventHandler {
             LOGGER.warn("记录玩家登录活动失败: {}", e.getMessage());
         }
         if (!QQBindConfig.ENABLE_WHITELIST_CHECK) return;
+        if (PlayerStateManager.handleRuntimeLogin(player)) return;
 
         String gameId = player.getScoreboardName();
         BindingManager manager = FabricModInitializer.getBindingManager();
@@ -54,11 +55,11 @@ public class FabricEventHandler {
      * 玩家登出时清理资源
      */
     public static void onPlayerLogout(ServerPlayer player) {
+        PlayerStateManager.removePlayer(player);
         try {
             PlayerActivityManager.onPlayerLogout(player.getUUID(), player.getScoreboardName());
         } catch (Exception e) {
             LOGGER.warn("记录玩家退出活动失败: {}", e.getMessage());
         }
-        PlayerStateManager.removePlayer(player);
     }
 }

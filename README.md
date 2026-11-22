@@ -8,6 +8,12 @@
 
 ## 📖 简介
 
+QQ官方兼容开发已补齐原生管理员解绑/list/operation retry/cancel、原请求人显式未决恢复、持久写命令防重、remote/local权威及原子状态。配套插件本人排行和各服后台管理也已接入；四个最新模块完整构建/依赖打包通过，源码与构建快照一致，Jar中的Mixin/refmap、新入口和Java目标已核对。最新产物：build/qqofficial-development/2026-11-19-complete-development/，详见其中BUILD_INFO.md和开发记录；正式QQ/MC/SQL/浏览器验收尚未完成，不当作已上线版本。部署、秘密配置、DDL和备份由用户按插件QQ_OFFICIAL_DELIVERY.md自行执行。
+
+2026-11-20源码更新：已修中心operations读取失败时本服持久预占回执分流，不据本地事实提交中心变更；新增只读check?view=active_roster分页供插件管理员绑定检测，游标绑定本服/查询模式/limit；/api/status显示当前内存就绪状态。配套插件已修现行QQ消息协议并补管理/查询差异。**依用户要求本轮未测试、未重新构建四模块，上述2026-11-19旧Jar不含本轮修改，SOURCE_HASHES也不能当作本轮源码一致证明。** 后续需集中必要验证和重新打包，再按插件QQ_OFFICIAL_TEST_CHECKLIST.md验收；真实环境仍未验收。
+
+正式构建使用仓库中的 Gradle Wrapper 和各模块 build.gradle；运行 Gradle 前由用户自行准备构建属性。此前的隔离构建、缓存快照和交付打包脚本依赖开发电脑路径，现仅本机保留并从 Git 过滤。核心 Java 回归、测试替身和合成夹具保留在仓库，tests/ 通过 .gitattributes 从发布源码归档排除；它们不进入模组运行 Jar。build/、.scratch/、缓存及生成 Jar 继续忽略，前端/模组实际运行源码和必要资源不受这些规则影响。
+
 **QQBindMod** 是一个服务端模组，它内置了一个轻量级 HTTP 服务器，为机器人程序（如基于 AstrBot 的 QQ 机器人）提供 RESTful API，用于绑定/解绑 QQ 号与游戏内玩家 ID，并自动同步原版白名单。
 
 **数据库**：支持 **“中心数据库模式”**，通过 TIDB数据库 或兼容的 HTTP API 数据库实现跨服数据共享，真正实现 **“一次绑定，全服通用”**。同时保留了原有的 **“本地模式”** 以实现向后兼容。

@@ -5,6 +5,7 @@ import com.poso.qqbind.QQBindConfig;
 import com.poso.qqbind.api.WebServer;
 import com.poso.qqbind.api.holder.PlatformInfoHolder;
 import com.poso.qqbind.core.BindingManager;
+import com.poso.qqbind.core.BindingBootstrap;
 import com.poso.qqbind.core.PlayerActivityManager;
 import com.poso.qqbind.core.PlayerPermissions;
 import com.poso.qqbind.core.PlayerPing;
@@ -79,15 +80,17 @@ public class QQBindMod {
                 LOGGER.error("初始化 PlayerActivityManager 失败", e);
             }
 
-            DataStorage storage;
-            if ("local".equalsIgnoreCase(QQBindConfig.STORAGE_MODE)) {
-                storage = new JsonStorage();
-                LOGGER.info("Using local JsonStorage.");
-            } else {
-                storage = new RemoteStorage();
-                LOGGER.info("Using RemoteStorage with TiDB.");
-            }
-            bindingManager = new BindingManager(storage);
+            bindingManager = BindingBootstrap.start(() -> {
+                DataStorage storage;
+                if ("local".equalsIgnoreCase(QQBindConfig.STORAGE_MODE)) {
+                    storage = new JsonStorage();
+                    LOGGER.info("Using local JsonStorage.");
+                } else {
+                    storage = new RemoteStorage();
+                    LOGGER.info("Using RemoteStorage with TiDB.");
+                }
+                return storage;
+            });
 
             webServer = new WebServer(bindingManager);
             webServer.start();
@@ -115,12 +118,11 @@ public class QQBindMod {
             LOGGER.error("关闭 PlayerActivityManager 失败", e);
         }
 
-        if (bindingManager != null) {
-            bindingManager.close();
-        }
         if (webServer != null) {
             webServer.stop();
         }
+        BindingBootstrap.stop();
+        bindingManager = null;
         LOGGER.info("QQBindMod resources released.");
     }
 

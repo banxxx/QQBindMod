@@ -11,6 +11,7 @@ import com.poso.qqbind.api.handler.ConsoleCommandHandler;
 import com.poso.qqbind.api.holder.PlatformInfoHolder;
 import com.poso.qqbind.api.response.ErrorCode;
 import com.poso.qqbind.core.*;
+import com.poso.qqbind.official.OfficialHttpHandler;
 import com.poso.qqbind.server.ServerProviderHolder;
 import com.poso.qqbind.storage.DataStorage;
 import com.poso.qqbind.storage.RemoteStorage;
@@ -77,6 +78,8 @@ public class WebServer {
             }
 
             // 注册路由
+            server.createContext(OfficialHttpHandler.PREFIX, new OfficialHttpHandler(
+                    BindingBootstrap::authorizeOfficialHttp, BindingBootstrap::dispatchOfficialHttp));
             server.createContext("/api/bind", new BindHandler());
             server.createContext("/api/unbind", new UnbindHandler());
             server.createContext("/api/check", new CheckHandler());
@@ -306,8 +309,13 @@ public class WebServer {
             serverInfo.addProperty("storage_mode", QQBindConfig.STORAGE_MODE);
             // 白名单校验开关当前值：机器人配置页要显示，读的是静态字段，不必进主线程快照
             serverInfo.addProperty("whitelist_check_enabled", QQBindConfig.ENABLE_WHITELIST_CHECK);
-            DataStorage storage = bindingManager.getStorage();
-            if (storage instanceof RemoteStorage) {
+            DataStorage storage = bindingManager == null ? null : bindingManager.getStorage();
+            if (QQBindConfig.isOfficialBindingSelected()) {
+                serverInfo.addProperty("storage_type", "qq_official");
+                serverInfo.addProperty("binding_ready", BindingBootstrap.officialBindingReadyFast());
+                serverInfo.addProperty("binding_runtime", BindingBootstrap.status());
+                serverInfo.addProperty("db_state", "unknown");
+            } else if (storage instanceof RemoteStorage) {
                 serverInfo.addProperty("db_available", ((RemoteStorage) storage).isDbAvailable());
             } else {
                 serverInfo.addProperty("db_available", false);
