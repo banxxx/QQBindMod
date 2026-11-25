@@ -33,7 +33,7 @@ OneBot 模式适合已经有一个 QQ 群机器人（例如基于 AstrBot + OneB
 | --- | --- |
 | `qqGroup` | 真实 QQ 群号，不能为空。 |
 | `groupHint` | 消息里显示的群号。留空自动使用 `qqGroup`。只影响展示。 |
-| `serverId` | 可省略、留空或保留 `<SERVER_UUID>`，模组会自动生成短标识。它只用于本进程令牌命名空间，不是跨服身份。 |
+| `serverId` | 可省略、留空或保留 `<SERVER_UUID>`，模组会在内存里生成短标识，但不会写回配置文件。它只用于本进程令牌命名空间，不是跨服身份。 |
 | `storageMode` | `local` 单服；`hybrid` / `remote` 需要中心数据库。 |
 | `dataFilePath` | 高级项，默认 `qqbind/bindings.json`，一般不需要改。 |
 

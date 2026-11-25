@@ -43,7 +43,7 @@ QQBind QQ 官方平台配置模板（JSONC）
     "bindingGroupId": "<GROUP_OPENID>",
     /* 显示用群号，必须替换为真实群号；只填数字 */
     "groupHint": "123456789",
-    /* 本服 UUID，必须替换为真实值 */
+    /* 本服 UUID；从插件「群与服务器 → 编辑服务器」复制，必须完全一致 */
     "serverId": "<SERVER_UUID>",
     /* 存储模式：local=本地，hybrid=混合，remote=远程 */
     "storageMode": "local",

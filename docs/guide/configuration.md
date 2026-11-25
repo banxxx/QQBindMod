@@ -78,7 +78,7 @@
 | --- | --- | --- | --- |
 | `qqGroup` | string | 是 | 真实 QQ 群号。既用于 `{groupHint}` 展示，也用于 OneBot 数据隔离。不能为空。 |
 | `groupHint` | string | 否 | 展示用群号。留空时自动使用 `qqGroup`。只影响消息展示，不参与鉴权或数据隔离。 |
-| `serverId` | string | 否 | 本进程令牌命名空间。可省略、留空或保留 `<SERVER_UUID>`，模组会自动生成短标识。 |
+| `serverId` | string | 否 | 本进程令牌命名空间。可省略、留空或保留 `<SERVER_UUID>`，模组会在内存里生成短标识；不会写回配置文件。 |
 | `storageMode` | string | 否 | `local`、`hybrid` 或 `remote`。新模板默认 `local`。 |
 | `dataFilePath` | string | 否 | 高级项，默认模板不展示。默认 `qqbind/bindings.json`。 |
 | `jdbcUrl` | string | 非 local 时 | 中心数据库 JDBC 地址。`local` 时自动忽略。 |

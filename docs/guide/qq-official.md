@@ -31,7 +31,7 @@ QQ 官方模式仍在持续验证中。正式上线前，请在测试服完整�
 }
 ```
 
-3. `environmentId` 和 `serverId` 必须是规范 UUID；占位符 `<ENVIRONMENT_UUID>`、`<SERVER_UUID>` 不能直接使用。
+3. `environmentId` 和 `serverId` 必须是规范 UUID；占位符 `<ENVIRONMENT_UUID>`、`<SERVER_UUID>` 不能直接使用。`environmentId` 在插件「全局参数 → 生效机器人」复制，`serverId` 在「群与服务器 → 编辑服务器」复制。
 4. `bindingGroupId` 是绑定群的 `group_openid`，不是群号，不能拿来展示给玩家。
 5. 修改官方运行期字段后完整停启服务器，不能只执行 `/qqbind reload`。
 
@@ -42,7 +42,7 @@ QQ 官方模式仍在持续验证中。正式上线前，请在测试服完整�
 | `environmentId` | QQ 官方环境 UUID，必须与机器人插件配置一致。参与作用域隔离和签名。 |
 | `bindingGroupId` | 绑定群的 `group_openid`，参与作用域隔离与鉴权。不是群号。 |
 | `groupHint` | 玩家能看到的群号，只填数字。留空时消息回退为“当前官方群”。只用于展示，不参与鉴权或数据隔离。 |
-| `serverId` | 本服 UUID，必须与插件配置一致。不能省略，也不建议在环境之间复用。 |
+| `serverId` | 本服 UUID，必须与插件配置一致。在插件「群与服务器 → 编辑服务器」查看并复制。不能省略，也不建议在环境之间复用。 |
 | `configurationRevision` | 官方配置修订号，通常保持 `"1"`。只在官方中心配置升级、令牌轮换或数据源变更时修改。 |
 | `storageMode` | `local`、`hybrid` 或 `remote`。本地/混合/远程的差异见 [存储与跨服](/guide/storage)。 |
 | `createFreshState` | 是否重建本地官方状态。设置为 `true` 会让会话处于仅初始化状态；除非明确要重建，否则保持 `false`。 |
@@ -69,6 +69,8 @@ QQ 官方模式仍在持续验证中。正式上线前，请在测试服完整�
 - 模组不会自动生成可运行的 OneBot 默认配置；
 - 会写回一份 `bindingPlatform=qq_official` 的官方占位模板；
 - HTTP API 保持关闭，直到你填写真实值并完整停启。
+
+模板里的 `<RESTORE_SERVER_UUID>` 表示“填回原来的 serverId”，不是让你生成一个新的：从插件「群与服务器 → 编辑服务器」复制同一台服务器的 ID。官方段的 `serverId` 不能随机生成，也不要用 OneBot 段的 8 位短标识代替。
 
 这样可以避免官方服在配置丢失后静默切回旧身份。
 

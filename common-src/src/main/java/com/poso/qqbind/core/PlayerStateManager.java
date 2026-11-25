@@ -17,7 +17,9 @@ import net.minecraft.world.level.GameType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.reflect.Method;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -28,6 +30,30 @@ import java.util.concurrent.ConcurrentHashMap;
 public class PlayerStateManager {
     private static final Logger LOGGER = LoggerFactory.getLogger(PlayerStateManager.class);
     private static final String MODE_MARKER_PREFIX = "qqbind-official-restriction-v1:";
+
+    // 26.2 把 Entity#getTags() 改名为 entityTags()，旧平台仍是 getTags()。
+    // common-src 被所有平台共用，编译期无法同时引用两个名字，故按名字反射取其中之一。
+    private static final Method PLAYER_TAGS = resolvePlayerTagsMethod();
+
+    private static Method resolvePlayerTagsMethod() {
+        for (String name : new String[]{"entityTags", "getTags"}) {
+            try {
+                return ServerPlayer.class.getMethod(name);
+            } catch (NoSuchMethodException ignored) {
+                // 尝试下一个名字
+            }
+        }
+        throw new IllegalStateException("ServerPlayer 上找不到标签读取方法");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Set<String> tagsOf(ServerPlayer player) {
+        try {
+            return (Set<String>) PLAYER_TAGS.invoke(player);
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException("读取玩家标签失败", e);
+        }
+    }
 
     // 存储受限玩家的 UUID
     private static final Map<UUID, Boolean> restrictedPlayers = new ConcurrentHashMap<>();
@@ -125,7 +151,7 @@ public class PlayerStateManager {
         if (entry == null) {
             var previous = savedOfficialMode(player);
             if (previous == null) {
-                player.getTags().stream().filter(tag -> tag.startsWith(MODE_MARKER_PREFIX))
+                tagsOf(player).stream().filter(tag -> tag.startsWith(MODE_MARKER_PREFIX))
                         .toList().forEach(player::removeTag);
                 String marker = BindingBootstrap.officialRestrictionMarker(player.getUUID().toString(), current.name());
                 if (marker != null && !player.addTag(marker)) marker = null;
@@ -229,7 +255,7 @@ public class PlayerStateManager {
 
     private static PreviousMode savedOfficialMode(ServerPlayer player) {
         PreviousMode saved = null;
-        for (String tag : player.getTags()) {
+        for (String tag : tagsOf(player)) {
             if (!tag.startsWith(MODE_MARKER_PREFIX)) continue;
             if (saved != null) return null;
             for (GameType mode : GameType.values()) {

@@ -49,7 +49,10 @@ dependencies {
     implementation 'com.zaxxer:HikariCP:5.0.1'
 //    include 'com.mysql:mysql-connector-j:8.0.33'
 //    include 'com.zaxxer:HikariCP:5.0.1'
-    shadow 'com.mysql:mysql-connector-j:8.0.33'
+    shadow('com.mysql:mysql-connector-j:8.0.33') {
+        // Classic JDBC only; X DevAPI/protobuf is unused and adds ~1.5 MB.
+        exclude group: 'com.google.protobuf', module: 'protobuf-java'
+    }
     shadow 'com.zaxxer:HikariCP:5.0.1'
 }
 
@@ -63,6 +66,9 @@ shadowJar {
     exclude 'META-INF/*.SF'
     exclude 'META-INF/*.DSA'
     exclude 'META-INF/*.RSA'
+    // 驱动类已被重定位，原始服务文件会让 ServiceLoader 找不到类。
+    // 本模组显式加载驱动，排除后也不会影响自己的连接。
+    exclude 'META-INF/services/java.sql.Driver'
 }
 
 remapJar {

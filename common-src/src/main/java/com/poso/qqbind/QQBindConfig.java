@@ -676,7 +676,7 @@ public class QQBindConfig {
             text.append("    \"bindingGroupId\": \"<RESTORE_GROUP_OPENID>\",").append(nl);
             text.append("    /* 显示用群号，必须替换为真实群号；只填数字 */").append(nl);
             text.append("    \"groupHint\": \"123456789\",").append(nl);
-            text.append("    /* 本服 UUID，必须替换为真实值 */").append(nl);
+            text.append("    /* 本服 UUID；从插件「群与服务器 → 编辑服务器」复制，必须完全一致 */").append(nl);
             text.append("    \"serverId\": \"<RESTORE_SERVER_UUID>\",").append(nl);
             text.append("    /* 存储模式：local=本地，hybrid=混合，remote=远程 */").append(nl);
             text.append("    \"storageMode\": \"local\",").append(nl);
@@ -785,7 +785,7 @@ public class QQBindConfig {
         text.append("    \"groupHint\": \"\",").append(nl);
         text.append("    /* 存储模式：local=本地，hybrid=混合，remote=远程 */").append(nl);
         text.append("    \"storageMode\": \"local\",").append(nl);
-        text.append("    /* 本服标识，保留占位或留空自动生成 */").append(nl);
+        text.append("    /* 本服标识；可留空或保留占位，仅在进程内生成，不写回本文件 */").append(nl);
         text.append("    \"serverId\": \"<SERVER_UUID>\",").append(nl);
         text.append("    /* 本地绑定数据固定保存在 qqbind/bindings.json，无需配置 */").append(nl);
         text.append("    /* 内存缓存秒数 */").append(nl);
@@ -810,7 +810,7 @@ public class QQBindConfig {
         text.append("    \"bindingGroupId\": \"<GROUP_OPENID>\",").append(nl);
         text.append("    /* 显示用群号，必须替换为真实群号；只填数字 */").append(nl);
         text.append("    \"groupHint\": \"123456789\",").append(nl);
-        text.append("    /* 本服 UUID，必须替换为真实值 */").append(nl);
+        text.append("    /* 本服 UUID；从插件「群与服务器 → 编辑服务器」复制，必须完全一致 */").append(nl);
         text.append("    \"serverId\": \"<SERVER_UUID>\",").append(nl);
         text.append("    /* 存储模式：local=本地，hybrid=混合，remote=远程 */").append(nl);
         text.append("    \"storageMode\": \"local\",").append(nl);

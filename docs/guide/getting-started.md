@@ -46,15 +46,15 @@ QQBindMod 是**服务端模组**。它本身不直接登录 QQ，而是在 Minec
 }
 ```
 
-`serverId` 在 OneBot 模式下可以保留占位符或留空，模组会自动生成一个进程内短标识。
+`serverId` 在 OneBot 模式下可以保留占位符或留空，模组会在内存里生成一个进程内短标识；这个值不会写回配置文件，看到文件里仍是占位符属于正常现象。
 
 ### 使用 QQ 官方模式
 
 把 `bindingPlatform` 改成 `qq_official`，并填写 `qq_official` 段。下面这些字段必须替换成真实值：
 
-- `environmentId`：官方环境 UUID
+- `environmentId`：官方环境 UUID，在插件「全局参数 → 生效机器人」查看并复制
 - `bindingGroupId`：绑定群的 `group_openid`，不是群号
-- `serverId`：本服 UUID
+- `serverId`：本服 UUID，在插件「群与服务器 → 编辑服务器」查看并复制
 - `apiToken`：随机长字符串
 - `configurationRevision`：通常保持 `"1"`
 

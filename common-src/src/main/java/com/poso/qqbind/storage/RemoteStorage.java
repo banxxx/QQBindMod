@@ -57,6 +57,9 @@ public class RemoteStorage implements DataStorage {
         try {
             HikariConfig config = new HikariConfig();
             config.setJdbcUrl(QQBindConfig.JDBC_URL);
+            // 固定使用本模组内置的驱动，避免 DriverManager 选中其它模组注册的 MySQL 驱动。
+            // Fabric 构建时 Shadow 会把类名重定位到 com.poso.qqbind.libs.mysql.*。
+            config.setDriverClassName("com.mysql.cj.jdbc.Driver");
             config.setUsername(QQBindConfig.DB_USER);
             config.setPassword(QQBindConfig.DB_PASSWORD);
 
