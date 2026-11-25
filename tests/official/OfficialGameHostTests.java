@@ -1,6 +1,7 @@
 package com.poso.qqbind.official;
 
 import com.google.gson.JsonObject;
+import com.poso.qqbind.QQBindConfig;
 import com.poso.qqbind.core.BindingBootstrap;
 import com.poso.qqbind.core.PlayerPermissions;
 import com.poso.qqbind.core.PlayerStateManager;
@@ -34,10 +35,15 @@ final class OfficialGameHostTests {
         player.connection.accepting = false;
     }
 
+    /** 官方提示与 OneBot 共用模板，绑定码现在夹在整句提示里，取最后一个独立的 6 位数字。 */
     private static String subtitle(ServerPlayer player) {
-        return player.connection.packets.stream().filter(ClientboundSetSubtitleTextPacket.class::isInstance)
-                .map(ClientboundSetSubtitleTextPacket.class::cast).map(p -> p.text().text())
-                .filter(value -> value.matches("§f[0-9]{6}")).map(value -> value.substring(2)).reduce((a, b) -> b).orElse(null);
+        String code = null;
+        for (var packet : player.connection.packets) {
+            if (!(packet instanceof ClientboundSetSubtitleTextPacket subtitle)) continue;
+            var matcher = java.util.regex.Pattern.compile("(?<![0-9])([0-9]{6})(?![0-9])").matcher(subtitle.text().text());
+            if (matcher.find()) code = matcher.group(1);
+        }
+        return code;
     }
 
     private static OfficialTokenApi.Reply call(ExecutorService io, String path, JsonObject body) throws Exception {
@@ -69,6 +75,22 @@ final class OfficialGameHostTests {
                 check(code != null && validate(io, code).equals("OK"));
                 quit(player);
                 check(validate(io, code).equals("TOKEN_INVALID"));
+            });
+            test("official_prompt_uses_the_configured_group_hint", () -> {
+                String previous = QQBindConfig.OFFICIAL_GROUP_HINT;
+                QQBindConfig.OFFICIAL_GROUP_HINT = "987654321";
+                try {
+                    var player = join(server, new UUID(1, 9), "Player_H");
+                    server.takeTask().run();
+                    String prompt = player.connection.packets.stream()
+                            .filter(ClientboundSetSubtitleTextPacket.class::isInstance)
+                            .map(ClientboundSetSubtitleTextPacket.class::cast)
+                            .map(p -> p.text().text()).reduce((a, b) -> b).orElse(null);
+                    check(prompt != null && prompt.contains("987654321") && subtitle(player) != null);
+                    quit(player);
+                } finally {
+                    QQBindConfig.OFFICIAL_GROUP_HINT = previous;
+                }
             });
             test("late_game_callback_and_logout_do_not_touch_the_replacement_connection", () -> {
                 UUID uuid = new UUID(1, 2);

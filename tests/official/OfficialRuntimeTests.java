@@ -50,6 +50,68 @@ public final class OfficialRuntimeTests {
                 expect("INVALID_INPUT",() -> OfficialRuntimeSettings.parse(value));
             }
         });
+        test("official_database_accepts_the_same_names_as_onebot_and_keeps_the_legacy_shape",() -> {
+            JsonObject value=config(); JsonObject official=value.getAsJsonObject("official");
+            official.remove("database");
+            JsonObject db=new JsonObject();
+            db.addProperty("jdbcUrl","jdbc:mysql://db.example.invalid:4000/synthetic_official?useSSL=false&allowLoadLocalInfile=true");
+            db.addProperty("dbUser","SYNTHETIC_DB_USER"); db.addProperty("dbPassword","SYNTHETIC_NOT_A_REAL_PASSWORD");
+            official.add("database",db);
+            Properties parsed=OfficialRuntimeSettings.parse(value).databaseProperties();
+            check(parsed.stringPropertyNames().equals(Set.of("host","port","database","user","password")));
+            check(parsed.getProperty("host").equals("db.example.invalid") && parsed.getProperty("port").equals("4000")
+                    && parsed.getProperty("database").equals("synthetic_official") && parsed.getProperty("user").equals("SYNTHETIC_DB_USER"));
+
+            JsonObject noPort=value.deepCopy();
+            noPort.getAsJsonObject("official").getAsJsonObject("database")
+                    .addProperty("jdbcUrl","jdbc:mysql://db.example.invalid/synthetic_official");
+            check(OfficialRuntimeSettings.parse(noPort).databaseProperties().getProperty("port").equals("3306"));
+
+            for (String bad : List.of("jdbc:postgresql://db.example.invalid/x","jdbc:mysql://db.example.invalid:0/x",
+                    "jdbc:mysql://db.example.invalid:70000/x","jdbc:mysql://db.example.invalid/x/y",
+                    "jdbc:mysql:///x","jdbc:mysql://db.example.invalid:/x","jdbc:mysql://db.example.invalid/x#frag")) {
+                JsonObject broken=value.deepCopy();
+                broken.getAsJsonObject("official").getAsJsonObject("database").addProperty("jdbcUrl",bad);
+                expect("INVALID_INPUT",() -> OfficialRuntimeSettings.parse(broken));
+            }
+            JsonObject missingUser=value.deepCopy();
+            missingUser.getAsJsonObject("official").getAsJsonObject("database").remove("dbUser");
+            expect("INVALID_INPUT",() -> OfficialRuntimeSettings.parse(missingUser));
+            JsonObject mixed=value.deepCopy();
+            mixed.getAsJsonObject("official").getAsJsonObject("database").addProperty("host","db.example.invalid");
+            expect("INVALID_INPUT",() -> OfficialRuntimeSettings.parse(mixed));
+            JsonObject local=config(); local.addProperty("storageMode","local");
+            local.getAsJsonObject("official").addProperty("allowCenterSync",false);
+            // local 自动排除 database 段：字段存在也不读取、不校验、不连接。
+            var localSettings=OfficialRuntimeSettings.parse(local);
+            check(localSettings.mode().equals("local") && localSettings.databaseProperties().isEmpty());
+        });
+        test("flat_official_fields_need_no_official_or_database_container",() -> {
+            JsonObject value=config(); value.remove("official");
+            value.addProperty("configurationRevision","1"); value.addProperty("createFreshState",false);
+            value.addProperty("allowCenterSync",true);
+            value.addProperty("jdbcUrl","jdbc:mysql://db.example.invalid:4000/synthetic_official?sslMode=DISABLED");
+            value.addProperty("dbUser","SYNTHETIC_DB_USER"); value.addProperty("dbPassword","SYNTHETIC_NOT_A_REAL_PASSWORD");
+            var settings=OfficialRuntimeSettings.parse(value);
+            Properties db=settings.databaseProperties();
+            check(settings.allowCenterSync() && db.getProperty("host").equals("db.example.invalid")
+                    && db.getProperty("port").equals("4000") && db.getProperty("database").equals("synthetic_official"));
+
+            JsonObject local=value.deepCopy(); local.addProperty("storageMode","local"); local.addProperty("allowCenterSync",false);
+            local.remove("jdbcUrl"); local.remove("dbUser"); local.remove("dbPassword");
+            check(OfficialRuntimeSettings.parse(local).mode().equals("local"));
+            JsonObject localWithDb=local.deepCopy();
+            localWithDb.addProperty("jdbcUrl","jdbc:mysql://db.example.invalid/x");
+            localWithDb.addProperty("dbUser","SYNTHETIC_DB_USER");
+            localWithDb.addProperty("dbPassword","SYNTHETIC_NOT_A_REAL_PASSWORD");
+            var ignored=OfficialRuntimeSettings.parse(localWithDb);
+            check(ignored.mode().equals("local") && ignored.databaseProperties().isEmpty());
+
+            JsonObject staleOnebot=value.deepCopy(); staleOnebot.addProperty("qqGroup","123456789");
+            expect("INVALID_INPUT",() -> OfficialRuntimeSettings.parse(staleOnebot));
+            JsonObject missingUser=value.deepCopy(); missingUser.remove("dbUser");
+            expect("INVALID_INPUT",() -> OfficialRuntimeSettings.parse(missingUser));
+        });
         test("config_document_rejects_duplicate_keys_and_oversize_without_excerpts",() -> {
             expect("INVALID_INPUT",() -> OfficialRuntimeSettings.document("{\"bindingPlatform\":\"onebot\",\"bindingPlatform\":\"qq_official\"}"));
             expect("INVALID_INPUT",() -> OfficialRuntimeSettings.document(" ".repeat(1024*1024+1)));
@@ -62,6 +124,27 @@ public final class OfficialRuntimeTests {
             check(settings.stateDirectory().startsWith(Path.of("qqbind","official",S.environmentId(),S.serverId())));
             check(settings.stateDirectory().getFileName().toString().matches("[0-9a-f]{64}"));
             JsonObject other=config(); other.addProperty("bindingGroupId","SYNTHETIC_OTHER_GROUP"); check(!settings.stateDirectory().equals(OfficialRuntimeSettings.parse(other).stateDirectory()));
+        });
+        test("official_storage_fields_align_and_data_directory_stays_inside_working_directory",() -> {
+            JsonObject tuned=config();
+            tuned.addProperty("dataDirectory","synthetic/official-state");
+            tuned.addProperty("cacheTtlSeconds",5);
+            tuned.addProperty("dbRetryIntervalSeconds",31);
+            tuned.addProperty("dbMaxRetries",2);
+            var settings=OfficialRuntimeSettings.parse(tuned);
+            check(settings.dataDirectory().equals("synthetic/official-state") && settings.cacheTtlSeconds() == 5
+                    && settings.dbRetryIntervalSeconds() == 31 && settings.dbMaxRetries() == 2);
+            check(settings.stateDirectory().startsWith(Path.of("synthetic","official-state",S.environmentId(),S.serverId())));
+            for (String bad : List.of("../escape","/absolute","C:/absolute",".","a/../b","")) {
+                JsonObject invalid=config(); invalid.addProperty("dataDirectory",bad);
+                expect("INVALID_INPUT",() -> OfficialRuntimeSettings.parse(invalid));
+            }
+            JsonObject badTtl=config(); badTtl.addProperty("cacheTtlSeconds",-1);
+            expect("INVALID_INPUT",() -> OfficialRuntimeSettings.parse(badTtl));
+            JsonObject badRetry=config(); badRetry.addProperty("dbRetryIntervalSeconds",0);
+            expect("INVALID_INPUT",() -> OfficialRuntimeSettings.parse(badRetry));
+            JsonObject badMax=config(); badMax.addProperty("dbMaxRetries",-1);
+            expect("INVALID_INPUT",() -> OfficialRuntimeSettings.parse(badMax));
         });
         test("failed_cold_pin_cannot_later_silently_fall_back_to_onebot",() -> {
             var registry=new OfficialRuntimeRegistry(); check(!registry.legacyAllowed()); expect("NOT_SUPPORTED",registry::pin);
@@ -140,7 +223,7 @@ public final class OfficialRuntimeTests {
                 check(!data.get("enabled").getAsBoolean() && data.get("persisted").getAsBoolean());
                 check(data.get("online_players").getAsInt() == 3 && data.get("released").getAsInt() == 1);
                 check(Boolean.FALSE.equals(applied.get()) && !settings.whitelistCheck());
-                JsonObject saved=OfficialModState.parse(Files.readString(Path.of("config/qqbind/qqbind-config.json"))).getAsJsonObject();
+                JsonObject saved=OfficialModState.parse(Files.readString(Path.of("config/qqbind/qqbind-config.jsonc"))).getAsJsonObject();
                 check(!saved.get("enableWhitelistCheck").getAsBoolean());
                 JsonObject wrong=S.wire(); wrong.addProperty("group_id","SYNTHETIC_OTHER_GROUP"); wrong.addProperty("enabled",true);
                 expect("SCOPE_MISMATCH",() -> session.dispatch("POST","/api/v2/binding/settings/whitelist",wrong,"Bearer " + TOKEN));

@@ -87,7 +87,8 @@ public class PlayerStateManager {
         if (!player.connection.isAcceptingMessages()) return;
         OfficialConnection previous = restrictionFor(player);
         if (!QQBindConfig.ENABLE_WHITELIST_CHECK || PlayerPermissions.isOperator(player)) {
-            if (previous != null) reconcileOfficialMode(player, previous);
+            // 关闭限制/OP 放行不是“绑定成功”，只恢复模式，不发成功提示。
+            if (previous != null) reconcileOfficialMode(player, previous, false);
             return;
         }
 
@@ -99,7 +100,7 @@ public class PlayerStateManager {
                 previous = new OfficialConnection(player.connection, null, saved);
                 officialRestrictions.put(player.getUUID(), previous);
             }
-            reconcileOfficialMode(player, previous);
+            reconcileOfficialMode(player, previous, true);
             return;
         }
 
@@ -173,7 +174,7 @@ public class PlayerStateManager {
         if (connection == null) return;
         String gameId = player.getScoreboardName();
         if (GameIdValidator.isValid(gameId) && BindingBootstrap.officialBoundFast(gameId)) {
-            reconcileOfficialMode(player, connection);
+            reconcileOfficialMode(player, connection, true);
             return;
         }
         var codes = BindingBootstrap.officialLoginCodes();
@@ -190,15 +191,36 @@ public class PlayerStateManager {
 
     private static void showOfficialCode(ServerPlayer player, OfficialTokenService.Issued issued, boolean full) {
         try {
+            String code = issued.tokenCode();
+            // 与 OneBot 共用同一套模板：群提示来自 qq_official.groupHint，
+            // 不把官方群 openid 暴露给玩家。
+            String groupHint = QQBindConfig.OFFICIAL_GROUP_HINT;
+            String bindCommand = "/mc bind " + code;
             if (full) {
                 player.connection.send(new ClientboundSetTitlesAnimationPacket(10, 100, 20));
-                player.connection.send(new ClientboundSetTitleTextPacket(Component.literal("§eQQ 官方绑定码")));
-                player.connection.send(new ClientboundSetSubtitleTextPacket(Component.literal("§f" + issued.tokenCode())));
+                player.connection.send(new ClientboundSetTitleTextPacket(Component.literal(
+                        QQBindConfig.formatMessage(officialTemplate(QQBindConfig.TITLE_TEMPLATE,
+                                QQBindConfig.OFFICIAL_DEFAULT_TITLE_TEMPLATE), code, groupHint, bindCommand))));
+                player.connection.send(new ClientboundSetSubtitleTextPacket(Component.literal(
+                        QQBindConfig.formatMessage(officialTemplate(QQBindConfig.SUBTITLE_TEMPLATE,
+                                QQBindConfig.OFFICIAL_DEFAULT_SUBTITLE_TEMPLATE), code, groupHint, bindCommand))));
             }
-            officialActionBar(player, "QQ 官方绑定码 " + issued.tokenCode() + " · 群绑定功能待开放");
+            player.connection.send(new ClientboundSetActionBarTextPacket(Component.literal(
+                    QQBindConfig.formatMessage(officialTemplate(QQBindConfig.ACTION_BAR_TEMPLATE,
+                            QQBindConfig.OFFICIAL_DEFAULT_ACTION_BAR_TEMPLATE), code, groupHint, bindCommand))));
         } catch (RuntimeException ignored) {
             // A send failure can include the packet text. The next prompt can display the current code again.
         }
+    }
+
+    /**
+     * 旧配置没有 {bindCommand} 时官方模式改用内置文案，避免把 OneBot 的群号或 /绑定 指令
+     * 发给官方玩家；完全中性的自定义文案没有这些内容，可以照常复用。
+     */
+    private static String officialTemplate(String configured, String fallback) {
+        if (configured == null) return fallback;
+        if (configured.contains("{bindCommand}")) return configured;
+        return configured.contains("{qqGroup}") || configured.contains("/绑定") ? fallback : configured;
     }
 
     private static void officialActionBar(ServerPlayer player, String message) {
@@ -218,14 +240,17 @@ public class PlayerStateManager {
         return saved;
     }
 
-    private static void reconcileOfficialMode(ServerPlayer player, OfficialConnection entry) {
-        BindingBootstrap.reconcileOfficialOnline(player.getScoreboardName(), () -> restoreOfficialMode(player, entry));
+    private static void reconcileOfficialMode(ServerPlayer player, OfficialConnection entry, boolean announceSuccess) {
+        BindingBootstrap.reconcileOfficialOnline(player.getScoreboardName(), () -> {
+            if (restoreOfficialMode(player, entry) && announceSuccess) sendOfficialBindSuccess(player);
+        });
     }
 
-    private static void restoreOfficialMode(ServerPlayer player, OfficialConnection entry) {
+    /** @return true 仅当本次调用确实解除了该连接的官方限制 */
+    private static boolean restoreOfficialMode(ServerPlayer player, OfficialConnection entry) {
         UUID id = player.getUUID();
         if (officialRestrictions.get(id) != entry || entry.connection() != player.connection
-                || !player.connection.isAcceptingMessages()) return;
+                || !player.connection.isAcceptingMessages()) return false;
         var previous = entry.previous();
         if (player.gameMode.getGameModeForPlayer() == GameType.SPECTATOR && previous.mode() != GameType.SPECTATOR) {
             player.setGameMode(previous.mode());
@@ -235,6 +260,24 @@ public class PlayerStateManager {
         }
         if (previous.marker() != null) player.removeTag(previous.marker());
         forgetOfficialRestriction(id, entry);
+        return true;
+    }
+
+    /** 官方绑定生效并解除旁观限制后的成功提示，与 OneBot 共用 bindSuccess* 模板。 */
+    private static void sendOfficialBindSuccess(ServerPlayer player) {
+        try {
+            if (!player.connection.isAcceptingMessages()) return;
+            String groupHint = QQBindConfig.OFFICIAL_GROUP_HINT;
+            player.connection.send(new ClientboundSetTitlesAnimationPacket(10, 70, 20));
+            player.connection.send(new ClientboundSetTitleTextPacket(Component.literal(
+                    QQBindConfig.formatMessage(QQBindConfig.BIND_SUCCESS_TITLE, null, groupHint, null))));
+            player.connection.send(new ClientboundSetSubtitleTextPacket(Component.literal(
+                    QQBindConfig.formatMessage(QQBindConfig.BIND_SUCCESS_SUBTITLE, null, groupHint, null))));
+            player.connection.send(new ClientboundSetActionBarTextPacket(Component.literal(
+                    QQBindConfig.formatMessage(QQBindConfig.BIND_SUCCESS_ACTION_BAR, null, groupHint, null))));
+        } catch (RuntimeException ignored) {
+            // 模式已经恢复；提示发送失败不能反过来把玩家留在限制状态。
+        }
     }
 
     private static void forgetOfficialRestriction(UUID playerId, OfficialConnection entry) {
@@ -262,7 +305,8 @@ public class PlayerStateManager {
             }
             doSendOfficialPrompt(player, true);
         } else if (entry != null) {
-            restoreOfficialMode(player, entry);
+            // 绑定状态转为 active 且此前确实受限：解除限制并提示成功。
+            if (restoreOfficialMode(player, entry)) sendOfficialBindSuccess(player);
         }
     }
 
@@ -362,10 +406,13 @@ public class PlayerStateManager {
         // 获取或刷新令牌
         String token = TokenManager.getOrRefreshToken(player);
 
-        // 构建消息
-        String title = QQBindConfig.formatMessage(QQBindConfig.TITLE_TEMPLATE, token);
-        String subtitle = QQBindConfig.formatMessage(QQBindConfig.SUBTITLE_TEMPLATE, token);
-        String actionBar = QQBindConfig.formatMessage(QQBindConfig.ACTION_BAR_TEMPLATE, token);
+        // 构建消息：占位符由 OneBot 平台上下文填写，与官方共用同一套模板。
+        // OneBot 的 {groupHint} 优先取 onebot.groupHint；留空时自动使用 qqGroup。
+        String groupHint = oneBotGroupHint();
+        String bindCommand = "/绑定 " + token;
+        String title = QQBindConfig.formatMessage(QQBindConfig.TITLE_TEMPLATE, token, groupHint, bindCommand);
+        String subtitle = QQBindConfig.formatMessage(QQBindConfig.SUBTITLE_TEMPLATE, token, groupHint, bindCommand);
+        String actionBar = QQBindConfig.formatMessage(QQBindConfig.ACTION_BAR_TEMPLATE, token, groupHint, bindCommand);
 
         // 发送 Title
         player.connection.send(new ClientboundSetTitleTextPacket(Component.literal(title)));
@@ -387,7 +434,13 @@ public class PlayerStateManager {
     private static void doSendActionBarReminder(ServerPlayer player) {
         if (!BindingBootstrap.legacyActive()) { doSendOfficialPrompt(player, false); return; }
         String token = TokenManager.getOrRefreshToken(player);
-        String actionBar = QQBindConfig.formatMessage(QQBindConfig.ACTION_BAR_TEMPLATE, token);
+        String actionBar = QQBindConfig.formatMessage(QQBindConfig.ACTION_BAR_TEMPLATE, token,
+                oneBotGroupHint(), "/绑定 " + token);
         player.connection.send(new ClientboundSetActionBarTextPacket(Component.literal(actionBar)));
+    }
+
+    private static String oneBotGroupHint() {
+        String hint = QQBindConfig.ONEBOT_GROUP_HINT;
+        return hint == null || hint.isEmpty() ? QQBindConfig.QQ_GROUP : hint;
     }
 }

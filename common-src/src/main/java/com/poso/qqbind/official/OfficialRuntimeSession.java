@@ -17,8 +17,11 @@ import java.util.function.*;
  * Startup opens no database connection.
  */
 public final class OfficialRuntimeSession implements AutoCloseable {
-    private static final long[] EFFECT_RETRY_NANOS = {2_000_000_000L, 10_000_000_000L, 30_000_000_000L,
-            60_000_000_000L, 300_000_000_000L};
+    /** 正常维护节奏：成功完成后仍按旧行为每 2 秒检查一次，避免影响绑定/在线效果。 */
+    private static final long NORMAL_MAINTENANCE_NANOS = 2_000_000_000L;
+    /** 维护失败后的退避倍数；实际间隔 = dbRetryIntervalSeconds × 倍数，最高 300 秒。 */
+    private static final int[] RETRY_FACTORS = {1, 2, 4, 10, 10};
+    private static final long MAX_RETRY_NANOS = 300_000_000_000L;
     private final OfficialRuntimeRegistry registry;
     private final OfficialRuntimeSettings settings;
     private final BooleanSupplier onGameThread;
@@ -35,7 +38,8 @@ public final class OfficialRuntimeSession implements AutoCloseable {
     private Future<?> maintenance;
     private long nextMaintenance;
     private boolean maintenanceAttempted;
-    private int maintenanceFailures;
+    /** I/O 线程写入、游戏线程读取，必须保证可见性。 */
+    private volatile int maintenanceFailures;
     private volatile boolean snapshotReady;
     private volatile long nextSnapshotRefresh;
     private OfficialTokenApi api;
@@ -190,7 +194,7 @@ public final class OfficialRuntimeSession implements AutoCloseable {
             if (local==null) source.merge(source.snapshots(reads).load());
             else local.acknowledgeOnIo();
             snapshotReady = true;
-            nextSnapshotRefresh=System.nanoTime()+60_000_000_000L;
+            nextSnapshotRefresh=System.nanoTime()+settings.cacheTtlSeconds()*1_000_000_000L;
         }
     }
     private boolean mayIssueCodeFast(String gameId) {
@@ -257,9 +261,16 @@ public final class OfficialRuntimeSession implements AutoCloseable {
         if (snapshotReady && !refreshDue && !effects.needsIo() && !whitelistIo && !tokens.hasPendingReservationsFast()
                 || maintenance != null && !maintenance.isDone()) return;
         long now = System.nanoTime();
+        if (maintenance != null) {
+            // 上一次维护已完成：按它实际记录的失败次数决定下一次间隔。
+            // 成功仍是 2 秒常规节奏；只有失败才使用 dbRetryIntervalSeconds 退避。
+            maintenance = null;
+            nextMaintenance = now + maintenanceDelayNanos();
+        }
         if (maintenanceAttempted && now - nextMaintenance < 0) return;
         maintenanceAttempted = true;
-        nextMaintenance = now + EFFECT_RETRY_NANOS[maintenanceFailures];
+        // 提交前先按正常节奏节流；完成后再按实际结果覆盖为成功节奏或失败退避。
+        nextMaintenance = now + NORMAL_MAINTENANCE_NANOS;
         try {
             maintenance = loginCodes.submitMaintenance(this::processEffectsOnIo);
         } catch (RejectedExecutionException ignored) { /* Login requests own this bounded queue too. */ }
@@ -299,10 +310,20 @@ public final class OfficialRuntimeSession implements AutoCloseable {
                 }
             }
             if (local!=null) try { local.acknowledgeOnIo(); } catch (RuntimeException ignoredLocalAck) { failed=true; }
-            maintenanceFailures = failed ? Math.min(maintenanceFailures + 1, EFFECT_RETRY_NANOS.length - 1) : 0;
+            maintenanceFailures = failed ? Math.min(maintenanceFailures + 1, 1000) : 0;
         } catch (RuntimeException ignored) {
-            maintenanceFailures = Math.min(maintenanceFailures + 1, EFFECT_RETRY_NANOS.length - 1);
+            maintenanceFailures = Math.min(maintenanceFailures + 1, 1000);
         }
+    }
+    private long maintenanceDelayNanos() {
+        if (maintenanceFailures <= 0) return NORMAL_MAINTENANCE_NANOS;
+        int step = Math.max(0, maintenanceFailures - 1);
+        if (settings.dbMaxRetries() > 0 && maintenanceFailures > settings.dbMaxRetries()) {
+            step = RETRY_FACTORS.length - 1;
+        }
+        step = Math.min(step, RETRY_FACTORS.length - 1);
+        long seconds = Math.min(300L, (long) settings.dbRetryIntervalSeconds() * RETRY_FACTORS[step]);
+        return Math.min(MAX_RETRY_NANOS, seconds * 1_000_000_000L);
     }
     /** Memory-only, no configuration lock or file/DB access on the game thread. */
     public boolean isBoundFast(String gameId) { return active() && mirror != null && mirror.isBoundFast(gameId); }

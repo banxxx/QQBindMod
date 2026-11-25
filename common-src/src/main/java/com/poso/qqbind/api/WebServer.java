@@ -60,7 +60,7 @@ public class WebServer {
         }
         if (QQBindConfig.isApiTokenUnsafe()) {
             LOGGER.error("配置文件里的 apiToken 缺失、为空或仍是默认占位值，已拒绝启动 HTTP API（否则任何人可调用绑定/解绑/白名单接口）。"
-                    + "请在 config/qqbind/qqbind-config.json 中将 apiToken 设置为随机长字符串，并与 QQ 机器人插件保持一致后重启服务器。");
+                    + "请在 config/qqbind/qqbind-config.jsonc（旧版 .json 也兼容）中将 apiToken 设置为随机长字符串，并与 QQ 机器人插件保持一致后重启服务器。");
             return;
         }
         if (QQBindConfig.isConsoleTokenWeak()) {

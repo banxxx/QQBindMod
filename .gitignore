@@ -20,7 +20,21 @@ out/
 *.ear
 .scratch
 /fabric-26.2
+node_modules/
+
+# VitePress 文档站源码入库；缓存和构建产物不入库。
 /docs/*
+!/docs/.vitepress/
+!/docs/.vitepress/**
+!/docs/index.md
+!/docs/guide/
+!/docs/guide/**
+!/docs/dev/
+!/docs/dev/**
+!/docs/public/
+!/docs/public/**
+/docs/.vitepress/cache/
+/docs/.vitepress/dist/
 
 run/
 runs/
@@ -33,8 +47,10 @@ crash-reports/
 
 config/qqbind/
 *.json
+# Docs tooling needs these two files tracked; real configs and records stay ignored.
+!package.json
+!package-lock.json
 # Only reviewed synthetic fixtures/templates; real configs and records stay ignored.
-!examples/qq-official-config.template.json
 !tests/fixtures/official_reservation_v2.json
 !tests/fixtures/official_mirror_v2.json
 !tests/fixtures/official_center_v1.json

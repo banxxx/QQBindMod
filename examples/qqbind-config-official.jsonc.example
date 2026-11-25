@@ -1,0 +1,70 @@
+/*
+QQBind QQ 官方平台配置模板（JSONC）
+保存为 config/qqbind/qqbind-config.jsonc
+旧版 qqbind-config.json 仍可读取；修改后需完整停启
+*/
+{
+  /* 格式版本，固定为 2 */
+  "configVersion": 2,
+  /* 当前绑定平台 */
+  "bindingPlatform": "qq_official",
+
+  /* HTTP API 端口，修改后需重启 */
+  "httpPort": 25566,
+  /* 监听地址，0.0.0.0 表示允许远程访问 */
+  "httpBindHost": "0.0.0.0",
+  /* API 令牌，必须与插件配置保持一致 */
+  "apiToken": "<RANDOM_LONG_ASCII_TOKEN>",
+  /* 是否拦截未绑定玩家 */
+  "enableWhitelistCheck": true,
+
+  /* 面板控制台令牌；留空不启用 /api/console，启用时至少 16 位 */
+  "consoleToken": "",
+  /* 控制台额外禁用的命令名，[] 表示不额外禁用 */
+  "consoleBannedCommands": [],
+  /* 未绑定提示标题 */
+  "titleTemplate": "§c您尚未绑定游戏ID！",
+  /* 未绑定提示副标题；{groupHint}=各平台段 groupHint 的值，{bindCommand}=绑定指令 */
+  "subtitleTemplate": "§e请在{groupHint}发送 §b{bindCommand} §e完成绑定。",
+  /* 未绑定提示动作栏 */
+  "actionBarTemplate": "§c您尚未绑定游戏ID！请在{groupHint}发送 §b{bindCommand}",
+  /* 绑定成功标题 */
+  "bindSuccessTitle": "§a绑定成功！",
+  /* 绑定成功副标题 */
+  "bindSuccessSubtitle": "§e祝您游戏愉快",
+  /* 绑定成功动作栏 */
+  "bindSuccessActionBar": "§a已解除限制，您可以正常游戏了",
+
+  /* 官方平台配置 */
+  "qq_official": {
+    /* 官方环境 ID */
+    "environmentId": "<ENVIRONMENT_UUID>",
+    /* 绑定群的 openid */
+    "bindingGroupId": "<GROUP_OPENID>",
+    /* 显示用群号，必须替换为真实群号；只填数字 */
+    "groupHint": "123456789",
+    /* 本服 UUID，必须替换为真实值 */
+    "serverId": "<SERVER_UUID>",
+    /* 存储模式：local=本地，hybrid=混合，remote=远程 */
+    "storageMode": "local",
+    /* 本地状态固定保存在 qqbind/official/ 下的环境/服务器/群子目录，无需配置 */
+    /* 中心库状态刷新间隔（秒），0 表示每次维护都刷新 */
+    "cacheTtlSeconds": 60,
+    /* 维护失败后的首次重试间隔（秒） */
+    "dbRetryIntervalSeconds": 30,
+    /* 最大退避次数，0 表示不限 */
+    "dbMaxRetries": 0,
+    /* 官方配置修订号，通常保持 1；仅在官方中心配置升级时修改 */
+    "configurationRevision": "1",
+    /* 是否重建本地状态 */
+    "createFreshState": false,
+    /* 是否允许中心库同步 */
+    "allowCenterSync": false,
+    /* 中心数据库地址；local 时自动忽略，hybrid/remote 时读取 */
+    "jdbcUrl": "jdbc:mysql://<DB_HOST>:3306/<DB_NAME>",
+    /* 中心数据库用户名；local 时自动忽略 */
+    "dbUser": "<DATABASE_USER>",
+    /* 中心数据库密码；local 时自动忽略 */
+    "dbPassword": "<DATABASE_PASSWORD>"
+  }
+}

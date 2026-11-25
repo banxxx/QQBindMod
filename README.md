@@ -2,21 +2,22 @@
 
 [![Forge 1.20.1](https://img.shields.io/badge/Forge-1.20.1-orange?style=flat-square)](https://files.minecraftforge.net/net/minecraftforge/forge/index_1.20.1.html)
 [![NeoForge 1.21.1](https://img.shields.io/badge/NeoForge-1.21.1-yellow?style=flat-square)](https://projects.neoforged.net/)
+[![Fabric](https://img.shields.io/badge/Fabric-1.20.1%20%7C%201.21.1-9cf?style=flat-square)](https://fabricmc.net/)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=flat-square)](LICENSE)
+[![Docs](https://img.shields.io/badge/Docs-GitHub%20Pages-2f855a?style=flat-square)](https://banxxx.github.io/QQBindMod/)
 
-一个通过 HTTP API 与 QQ 机器人联动，实现玩家 QQ 号与游戏 ID 绑定的 Minecraft 模组。支持 **Forge 1.20.1**、**NeoForge 1.21.1** 和 **Fabric 1.20.1 / 1.21.1**。
+一个通过 HTTP API 与 QQ 机器人联动，实现玩家 QQ 号与游戏 ID 绑定的 Minecraft 服务端模组。支持 **Forge 1.20.1**、**NeoForge 1.21.1** 和 **Fabric 1.20.1 / 1.21.1**。
+
+> 📚 **完整文档：<https://banxxx.github.io/QQBindMod/>**
+>
+> 第一次使用请从 [快速开始](https://banxxx.github.io/QQBindMod/guide/getting-started) 开始；配置字段、OneBot / QQ 官方接入、API 和排错都在文档站。开发阶段的历史记录已移到 [开发状态记录](https://banxxx.github.io/QQBindMod/dev/status)。
 
 ## 📖 简介
 
-QQ官方兼容开发已补齐原生管理员解绑/list/operation retry/cancel、原请求人显式未决恢复、持久写命令防重、remote/local权威及原子状态。配套插件本人排行和各服后台管理也已接入；四个最新模块完整构建/依赖打包通过，源码与构建快照一致，Jar中的Mixin/refmap、新入口和Java目标已核对。最新产物：build/qqofficial-development/2026-11-19-complete-development/，详见其中BUILD_INFO.md和开发记录；正式QQ/MC/SQL/浏览器验收尚未完成，不当作已上线版本。部署、秘密配置、DDL和备份由用户按插件QQ_OFFICIAL_DELIVERY.md自行执行。
+**QQBindMod** 是一个服务端模组。它内置轻量 HTTP API，供 QQ 机器人插件调用，完成 QQ 号与游戏 ID 的绑定/解绑、查询和白名单同步。
 
-2026-11-20源码更新：已修中心operations读取失败时本服持久预占回执分流，不据本地事实提交中心变更；新增只读check?view=active_roster分页供插件管理员绑定检测，游标绑定本服/查询模式/limit；/api/status显示当前内存就绪状态。配套插件已修现行QQ消息协议并补管理/查询差异。**依用户要求本轮未测试、未重新构建四模块，上述2026-11-19旧Jar不含本轮修改，SOURCE_HASHES也不能当作本轮源码一致证明。** 后续需集中必要验证和重新打包，再按插件QQ_OFFICIAL_TEST_CHECKLIST.md验收；真实环境仍未验收。
+支持本地 JSON、中心数据库和混合模式。中心库模式可通过 MySQL / TiDB 兼容数据库实现跨服共享，同时保留本地模式用于单服或向后兼容。
 
-正式构建使用仓库中的 Gradle Wrapper 和各模块 build.gradle；运行 Gradle 前由用户自行准备构建属性。此前的隔离构建、缓存快照和交付打包脚本依赖开发电脑路径，现仅本机保留并从 Git 过滤。核心 Java 回归、测试替身和合成夹具保留在仓库，tests/ 通过 .gitattributes 从发布源码归档排除；它们不进入模组运行 Jar。build/、.scratch/、缓存及生成 Jar 继续忽略，前端/模组实际运行源码和必要资源不受这些规则影响。
-
-**QQBindMod** 是一个服务端模组，它内置了一个轻量级 HTTP 服务器，为机器人程序（如基于 AstrBot 的 QQ 机器人）提供 RESTful API，用于绑定/解绑 QQ 号与游戏内玩家 ID，并自动同步原版白名单。
-
-**数据库**：支持 **“中心数据库模式”**，通过 TIDB数据库 或兼容的 HTTP API 数据库实现跨服数据共享，真正实现 **“一次绑定，全服通用”**。同时保留了原有的 **“本地模式”** 以实现向后兼容。
 
 ## ✨ 功能特性
 
@@ -42,6 +43,8 @@ QQBindMod/
 │   ├── storage/                   # JSON 存储及接口
 │   ├── utils/                     # 统计工具
 │   └── QQBindConfig.java          # 配置管理
+├── docs/                          # VitePress 用户文档站
+├── examples/                      # 配置模板
 ├── forge/                         # Forge 1.20.1 平台模块
 │   ├── src/main/java/...forge/
 │   │   ├── QQBindMod.java         # 模组入口
@@ -49,14 +52,14 @@ QQBindMod/
 │   │   ├── EventHandler.java
 │   │   └── ServerCommands.java
 │   └── src/main/resources/META-INF/mods.toml
-└── neoforge/                      # NeoForge 1.21.1 平台模块
+├── neoforge/                      # NeoForge 1.21.1 平台模块
     ├── src/main/java/...neoforge/
     │   ├── QQBindMod.java         # 模组入口（构造器注入）
     │   ├── NeoForgeServerProvider.java
     │   ├── EventHandler.java
     │   └── ServerCommands.java
     └── src/main/resources/META-INF/neoforge.mods.toml
-└── fabric-1.20.1/                 # Fabric 1.20.1 平台模块
+├── fabric-1.20.1/                 # Fabric 1.20.1 平台模块
 └── fabric-1.21.1/                 # Fabric 1.21.1 平台模块
 ```
 
@@ -92,65 +95,54 @@ JAR 文件位于 `neoforge/build/libs/qqbind-*-neoforge-1.21.1.jar`
 ./gradlew :fabric-1.20.1:build   # 1.20.1
 ./gradlew :fabric-1.21.1:build   # 1.21.1
 ```
-JAR 位于对应子项目的 `fabric/build/libs/qqbind-*-fabric-1.2*.1.jar` 下。
+JAR 位于对应模块的 `build/libs/` 下。
 
 ### 安装
 
 1. 将对应平台的 JAR 文件放入服务端的 `mods` 文件夹
-2. 启动服务器，模组会在 `config/qqbind/` 下生成默认配置文件 `qqbind-config.json`
-3. 修改配置文件中的 `apiToken`（**必须修改！**）和 `httpPort`（默认 25566）
-4. 根据需要设置存储模式（详见下方配置说明）
-5. `httpPort`与`storageMode`参数修改后需要重启服务器生效
+2. 启动服务器，模组会在 `config/qqbind/` 下生成默认配置文件 `qqbind-config.jsonc`（旧版 `qqbind-config.json` 仍可读取）
+3. 修改配置文件中的 `apiToken`（**必须修改！**）、`onebot.qqGroup` 和 `httpPort`（默认 25566）
+4. 按 [配置文档](https://banxxx.github.io/QQBindMod/guide/configuration) 选择 OneBot / QQ 官方模式和存储方式
+5. 端口、存储模式、绑定平台或官方运行期参数修改后需要完整停启；普通字段可用 `/qqbind reload`
 
-### 配置示例
+## ⚙️ 配置
 
-```json
+配置文件路径：`config/qqbind/qqbind-config.jsonc`（旧版 `qqbind-config.json` 仍兼容）。新安装会生成一份包含 `onebot` 和 `qq_official` 两个平台段的 JSONC 模板。
+
+- [配置文件字段与严格校验](https://banxxx.github.io/QQBindMod/guide/configuration)
+- [OneBot 模式](https://banxxx.github.io/QQBindMod/guide/onebot)
+- [QQ 官方模式](https://banxxx.github.io/QQBindMod/guide/qq-official)
+- [存储与跨服](https://banxxx.github.io/QQBindMod/guide/storage)
+- 配置模板：[`examples/qqbind-config.jsonc.example`](examples/qqbind-config.jsonc.example)、[`examples/qqbind-config-official.jsonc.example`](examples/qqbind-config-official.jsonc.example)
+
+### 最少需要改的字段
+
+| 字段 | 说明 |
+| --- | --- |
+| `apiToken` | 机器人插件访问 HTTP API 的 Bearer Token。必须是随机长字符串，不能保留默认占位值，否则 HTTP API 不启动。 |
+| `onebot.qqGroup` | OneBot 模式下填真实 QQ 群号；既用于展示，也用于数据隔离。 |
+| `httpPort` | HTTP API 端口，默认 `25566`。修改后需重启。 |
+| `httpBindHost` | 监听地址，默认 `0.0.0.0`；建议改成 `127.0.0.1` 或内网地址。 |
+| `bindingPlatform` | `onebot` 或 `qq_official`。切换平台必须完整停启。 |
+
+最小 OneBot 配置：
+
+```jsonc
 {
+  "configVersion": 2,
+  "bindingPlatform": "onebot",
   "httpPort": 25566,
   "httpBindHost": "127.0.0.1",
-  "apiToken": "your-strong-random-token",
-  "consoleToken": "",
-  "consoleBannedCommands": "op",
-  "enableWhitelistCheck": true,
-  "dataFilePath": "qqbind/bindings.json",
-  "serverId": "my-server",
-  "qqGroup": "123456789",
-  "titleTemplate": "§c您尚未绑定游戏ID！",
-  "subtitleTemplate": "§e请加入QQ群 {qqGroup} 发送 §b/绑定 {token} §e完成绑定。",
-  "actionBarTemplate": "§c您尚未绑定游戏ID！请加入QQ群 {qqGroup} 发送 §b/绑定 {token}",
-  "bindSuccessTitle": "§a绑定成功！",
-  "bindSuccessSubtitle": "§e祝您游戏愉快",
-  "bindSuccessActionBar": "§a已解除限制，您可以正常游戏了",
-  "storageMode": "hybrid",          // "local" | "remote" | "hybrid"
-  "dbApiUrl": "https://your-worker.workers.dev/api/query",
-  "dbApiToken": "your-worker-api-token",
-  "cacheTtlSeconds": 60
+  "apiToken": "replace-with-a-long-random-token",
+  "onebot": {
+    "qqGroup": "123456789",
+    "serverId": "<SERVER_UUID>",
+    "storageMode": "local"
+  }
 }
 ```
 
-### 存储模式说明
-
-| 模式 | 说明 | 适用场景 |
-| :--- | :--- | :--- |
-| local | 仅使用本地 JSON 文件（bindings.json）存储绑定数据，各服务器独立。 | 传统单服部署，或无需跨服共享。 |
-| remote | 仅使用远程数据库（通过 dbApiUrl 指向的 HTTP API，如 Cloudflare D1），不保留本地 JSON 备份。 | 完全依赖云数据库，追求数据强一致性。 |
-| hybrid | 推荐模式。优先从远程数据库读写，同时保留本地 JSON 作为缓存和降级备份。查询时先查内存缓存（TTL 可配置），未命中则请求远程数据库并更新缓存。写入时同时更新远程和本地。 | 追求高可用性，容忍短暂网络故障，实现跨服数据共享。 |
-
-### 配置项释义
-
-| 字段 | 类型 | 必填 | 说明 |
-| :--- | :--- | :--- | :--- |
-| storageMode | string | 否 | 存储模式，默认 "hybrid"。 |
-| dbApiUrl | string | 仅当模式非 local 时 | 远程数据库 API 的完整 URL（需实现文档中定义的协议）。 |
-| dbApiToken | string | 仅当模式非 local 时 | 用于验证远程 API 请求的 Bearer Token。 |
-| cacheTtlSeconds | integer | 否 | 内存缓存有效期（秒），默认 60 秒。 |
-| consoleToken | string | 否 | 控制台命令接口 `/api/console` 的独立 Bearer Token。留空即不注册该接口；填写但短于 16 位时模组拒绝启动 HTTP API。 |
-| consoleBannedCommands | string | 否 | 额外禁用的命令名（逗号分隔，不含参数），与代码内的永久硬禁清单叠加。 |
-
-重要提示：若要启用跨服数据共享，所有需要同步数据的服务器必须：
-- 使用相同的 dbApiUrl 和 dbApiToken
-- 配置相同的 qqGroup（即相同的 QQ 群号，用于数据隔离）
-- 将 storageMode 设为 hybrid 或 remote
+> `storageMode: local` 时两个平台都会自动忽略数据库字段，不会建立连接；改成 `hybrid` / `remote` 后才读取并校验。普通字段可用 `/qqbind reload`；端口、存储模式、绑定平台和官方运行期参数必须完整停启。
 
 ---
 
@@ -171,15 +163,7 @@ JAR 位于对应子项目的 `fabric/build/libs/qqbind-*-fabric-1.2*.1.jar` 下�
 | /api/cache/invalidate | POST | 清除指定玩家的缓存（用于机器人端主动刷新） |
 | /api/console | POST | 以控制台身份执行命令并回显输出（请求体：{"command":"whitelist list","actor":"qq:123"}，需 `consoleToken`） |
 
-### /api/console 的使用前提
-
-该接口等同于服务器控制台，默认关闭：只有配置了 `consoleToken` 才会注册，且它不与 `apiToken` 共用密钥。
-
-- 只在可信网络内暴露：`httpBindHost` 用 `127.0.0.1` 或内网网卡地址，并由防火墙限制来源 IP；不要把它开放到公网。
-- 每台服务器用自己的 `consoleToken`，多服之间不必也不建议取同一个值：一台的配置文件外泄不会波及其它台。机器人端按服务器单独保存该密钥。
-- 永久硬禁（配置改不动）：`stop`、`restart`、`reload`、`deploy`、`ban`、`ban-ip`、`pardon`、`pardon-ip`、`schedule`。其余命令默认可执行，包括 `op`、`execute`、`function` 等——需要限制时用 `consoleBannedCommands` 追加。
-- 单次调用按来源 IP 限流 20 次/分钟；命令长度上限 200 字符，不支持一次提交多条命令。
-- 返回的 `output` 最多 30 行、单行最多 500 字符，疑似包含口令/种子的行会被替换为提示；`status` 为 `timeout` 时表示模组没能在限定时间内取回结果，命令可能已经执行，不要当作"已取消"。
+> `/api/console` 等同于服务器控制台，默认关闭，只有配置了独立的 `consoleToken` 才会注册。完整的安全限制、硬禁命令、限流和请求示例见 [HTTP API 文档](https://banxxx.github.io/QQBindMod/guide/api)。
 
 ---
 
@@ -224,19 +208,31 @@ JAR 位于对应子项目的 `fabric/build/libs/qqbind-*-fabric-1.2*.1.jar` 下�
 ### 调试
 
 - 在 IDEA 中分别以 :forge:runServer、:neoforge:runServer 或 :fabric-1.20.1:runServer 启动
-- 端口 25566 默认绑定所有接口，可通过本地浏览器测试 API
+- 默认监听 `0.0.0.0:25566`，可通过本地浏览器或 curl 测试 API
 - 测试 API 示例：
   ```bash
   curl -H "Authorization: Bearer your-token" http://127.0.0.1:25566/api/check?gameId=test
   ```
 
+### 文档
+
+文档站源码在 `docs/`，使用 VitePress：
+
+```bash
+npm install
+npm run docs:dev     # 本地预览
+npm run docs:build   # 构建静态站点
+```
+
+推送到 `master` 后由 GitHub Actions 自动部署到 GitHub Pages。首次使用需在仓库 **Settings → Pages** 中把 Source 设为 **GitHub Actions**。
+
 ### 提交 PR
 
 欢迎提交 Issue 和 Pull Request。请确保：
 
-- 代码编译通过（两个平台）
+- 代码编译通过（对应加载器）
 - 添加必要的注释
-- 更新 README（如果功能有变化）
+- 功能或配置变化同步更新 `docs/` 文档和 `CHANGELOG.md`
 
 ## 📄 许可证
 
